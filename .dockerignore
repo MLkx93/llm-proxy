@@ -1,0 +1,20 @@
+# Never bake secrets into the image
+.env
+*.pem
+*.key
+
+# Dev/test artefacts
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+logs/
+
+# Docs and meta
+*.md
+.gitignore
+.dockerignore
+docker/docker-compose.yml
+tasks/

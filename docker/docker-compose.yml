@@ -1,0 +1,26 @@
+version: "3.9"
+
+services:
+  proxy:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: llm-proxy:dev
+    ports:
+      - "8080:8080"
+    env_file:
+      - ../.env          # never committed — see .env.example
+    volumes:
+      - ../logs:/app/logs   # audit log persists outside the container
+    read_only: true
+    tmpfs:
+      - /tmp              # uvicorn needs a writable /tmp
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

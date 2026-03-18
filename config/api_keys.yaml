@@ -1,0 +1,29 @@
+# API Key Registry
+#
+# Maps proxy API keys to the applications/teams that own them.
+# Keys are loaded at startup — restart required to pick up changes.
+#
+# Fields:
+#   key:      The bearer token clients send in Authorization header.
+#             In production, set these as env vars and reference them here,
+#             or use a secrets manager. Never commit real keys.
+#   app_id:   Stable identifier used in audit logs (e.g. "team-platform").
+#   team:     Human-readable team name (for ops/support reference only).
+#   enabled:  Set to false to revoke access without deleting the entry.
+
+keys:
+  - key: "dev-local-key-1234"
+    app_id: "local-dev"
+    team: "Development"
+    enabled: true
+
+  - key: "ci-pipeline-key-5678"
+    app_id: "ci-pipeline"
+    team: "Platform Engineering"
+    enabled: true
+
+  # Example of a revoked key (disabled but retained for audit history)
+  - key: "old-key-9999"
+    app_id: "decommissioned-app"
+    team: "Old Team"
+    enabled: false
