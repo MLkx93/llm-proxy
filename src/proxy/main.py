@@ -13,6 +13,7 @@ from .rate_limiter import is_allowed
 from src.input_policy import engine as input_policy
 from src.output_security import engine as output_security
 from src.output_security.engine import extract_response_text
+from config.settings import settings
 from src.audit import logger as audit
 
 logger = get_logger("proxy")
@@ -118,13 +119,19 @@ async def chat_completions(request: Request, body: ChatCompletionRequest):
 
     # --- LLM call (with timeout) ---
     try:
+        # Build LLM call kwargs — route through LiteLLM proxy if configured
+        llm_kwargs: dict = dict(
+            model=body.model,
+            messages=messages_raw,
+            temperature=body.temperature,
+            max_tokens=body.max_tokens,
+        )
+        if settings.LITELLM_API_BASE:
+            llm_kwargs["api_base"] = settings.LITELLM_API_BASE
+            llm_kwargs["api_key"] = settings.LITELLM_API_KEY
+
         response = await asyncio.wait_for(
-            litellm.acompletion(
-                model=body.model,
-                messages=messages_raw,
-                temperature=body.temperature,
-                max_tokens=body.max_tokens,
-            ),
+            litellm.acompletion(**llm_kwargs),
             timeout=LLM_TIMEOUT_S,
         )
     except asyncio.TimeoutError:
