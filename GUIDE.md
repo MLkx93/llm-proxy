@@ -24,32 +24,69 @@
 
 ### The Problem We're Solving
 
-In a company, developers use AI tools (like ChatGPT, Claude, etc.) by calling them directly from their applications. This is dangerous for several reasons:
+In a company, developers use AI tools (like Claude Code, ChatGPT, etc.) by calling them through a LiteLLM server. Normally they set two environment variables and the requests go straight to LiteLLM:
 
 ```
-Developer app ──────────────────────────────► OpenAI / Anthropic
-                   (no control, no visibility)
+Developer's tool                              LiteLLM Server
+(Claude Code)  ──────────────────────────────► (litellm.internal.example:3115)
+                   (no control, no visibility)     │
+                                                   ▼
+                                              AI Provider
+                                         (Anthropic / OpenAI)
 ```
 
-**Problems with direct access:**
-- A developer might accidentally paste a password into the prompt — it gets sent to OpenAI
+**Problems with this setup:**
+- A developer might accidentally paste a password into a prompt — it gets sent to the AI
 - An attacker might trick the AI into ignoring its safety rules (prompt injection)
 - The AI might suggest code that uses a malicious or vulnerable library
 - No record of what was sent or received (audit trail)
-- No way to enforce company policies
+- No way to enforce company security policies
 
-### Our Solution: A Proxy
+### Our Solution: A Transparent Gateway
 
-We built a **proxy** — a middleman that sits between all applications and the AI providers. Nothing gets through without our inspection.
+We built a **gateway proxy** that sits between the developer's tools and the LiteLLM server. The key word is **transparent** — the developer doesn't know it exists. They set two environment variables and use their tools normally:
+
+```bash
+# Instead of pointing directly to LiteLLM:
+export ANTHROPIC_BASE_URL="http://litellm.internal.example:3115/api"
+
+# They point to the proxy:
+export ANTHROPIC_BASE_URL="http://proxy-server:8080"
+export ANTHROPIC_AUTH_TOKEN="their-proxy-key"
+```
+
+The full flow:
 
 ```
-Developer app ──► [Our Proxy] ──► OpenAI / Anthropic
-                      │
-                 Checks BOTH
-                 input & output
+Developer's tool                    Our Proxy                  LiteLLM Server
+(Claude Code)  ────────────────►  (localhost:8080)  ────────►  (litellm.internal.example:3115)
+                                       │                            │
+                                  Scans input                       ▼
+                                  Scans output                 AI Provider
+                                  Logs everything
 ```
 
-Every prompt is scanned before it reaches the AI. Every response is scanned before it reaches the user. If something is unsafe, the proxy blocks it and logs it.
+Every prompt is scanned before it reaches the AI. Every response is scanned before it reaches the user. If something is unsafe, the proxy blocks it and logs it. The developer never notices any of this — it just works.
+
+### Two Endpoints
+
+The proxy exposes two API endpoints:
+
+| Endpoint | Format | Used by | Auth header |
+|----------|--------|---------|-------------|
+| `POST /v1/messages` | Anthropic format | Claude Code, Anthropic SDK | `x-api-key: <key>` |
+| `POST /v1/chat/completions` | OpenAI format | Other tools, OpenAI SDK | `Authorization: Bearer <key>` |
+
+### Two-Tier Authentication
+
+Users never get the real LiteLLM key. Instead:
+
+```
+User authenticates to proxy  →  with a proxy key (from config/api_keys.yaml)
+Proxy authenticates to LiteLLM → with the real LiteLLM key (from .env)
+```
+
+This means the proxy controls all access. You can revoke a user's proxy key without affecting anyone else, and without changing the upstream LiteLLM key.
 
 ---
 
@@ -229,8 +266,11 @@ LLM-proxy/
 
 This is the most important section. Understanding this flow means you understand the entire system.
 
+Both endpoints (`/v1/messages` and `/v1/chat/completions`) follow the same pipeline. The Anthropic endpoint (`/v1/messages`) is shown here because it's what Claude Code uses.
+
 ```
-Client sends POST /v1/chat/completions
+Claude Code sends POST /v1/messages
+(user has ANTHROPIC_BASE_URL pointed to the proxy)
             │
             ▼
 ┌─────────────────────────────┐
@@ -240,8 +280,9 @@ Client sends POST /v1/chat/completions
               │
               ▼
 ┌─────────────────────────────┐
-│   Step 2: Authentication    │  Is the Authorization: Bearer <key> valid?
-│   validate(header)          │  If NO → 401 UNAUTHORIZED + audit log
+│   Step 2: Authentication    │  Is the x-api-key header valid?
+│   validate_api_key(header)  │  Looked up against config/api_keys.yaml
+│                             │  If NO → 401 UNAUTHORIZED + audit log
 └─────────────┬───────────────┘
               │ YES
               ▼
@@ -252,12 +293,7 @@ Client sends POST /v1/chat/completions
               │ YES
               ▼
 ┌─────────────────────────────┐
-│   Step 4: Streaming Guard   │  Did they set stream=true? Block it.
-└─────────────┬───────────────┘
-              │ NO STREAM
-              ▼
-┌─────────────────────────────┐
-│   Step 5: Input Policy      │  Scan the prompt for:
+│   Step 4: Input Policy      │  Scan the prompt for:
 │   1. Secrets/credentials    │    - API keys, passwords, private keys
 │   2. Prompt injection       │    - "ignore instructions", jailbreaks
 │   3. PII (Presidio)         │    - emails, names, credit cards
@@ -267,15 +303,18 @@ Client sends POST /v1/chat/completions
               │ CLEAN
               ▼
 ┌─────────────────────────────┐
-│   Step 6: Call the AI       │  Forward to OpenAI/Anthropic via LiteLLM
-│   acompletion(model, msgs)  │  60 second timeout
+│   Step 5: Forward to        │  Send request to LiteLLM server via httpx
+│   upstream LiteLLM          │  URL: LITELLM_API_BASE/v1/messages
+│                             │  Auth: x-api-key: LITELLM_API_KEY
+│                             │  If streaming: buffer SSE, return as single response
+│                             │  60 second timeout
 │                             │  If timeout → 504 LLM_TIMEOUT
 │                             │  If error   → 502 LLM_ERROR
 └─────────────┬───────────────┘
               │ GOT RESPONSE
               ▼
 ┌─────────────────────────────┐
-│   Step 7: Output Security   │  Scan the AI's response:
+│   Step 6: Output Security   │  Scan the AI's response:
 │   1. Find code blocks       │    - Look for ```code``` blocks
 │   2. Extract dependencies   │    - Pull out package names (requests, flask…)
 │   3. Validate via Nexus     │    - Ask Nexus: is this package safe?
@@ -285,12 +324,15 @@ Client sends POST /v1/chat/completions
               │ SAFE
               ▼
 ┌─────────────────────────────┐
-│   Step 8: Return + Log      │  Send response to client
+│   Step 7: Return + Log      │  Send response to Claude Code
 │                             │  Write ALLOWED event to audit log
+│                             │  (User sees the AI response normally)
 └─────────────────────────────┘
 ```
 
 **Key point:** Every exit — whether it's a block or a success — writes an audit event. You can always answer "what happened to request X?" by searching `logs/audit.jsonl`.
+
+**Streaming:** When Claude Code sends `stream: true`, the proxy accepts it, buffers the full streamed response from LiteLLM internally, runs output checks on the complete text, then returns it as a single non-streamed response. The user's tool still works — it just doesn't see the response token-by-token.
 
 ---
 
@@ -298,7 +340,16 @@ Client sends POST /v1/chat/completions
 
 ### `src/proxy/main.py` — The Central File
 
-This is the most important file. It defines the entire request pipeline.
+This is the most important file. It defines the entire request pipeline and contains **two endpoints**:
+
+| Endpoint | Function | Format | How it forwards |
+|----------|----------|--------|----------------|
+| `POST /v1/messages` | `anthropic_messages()` | Anthropic | Direct httpx pass-through to LiteLLM |
+| `POST /v1/chat/completions` | `chat_completions()` | OpenAI | Via `litellm.acompletion()` |
+
+The Anthropic endpoint (`/v1/messages`) is the primary one — it's what Claude Code uses. It receives the raw request, runs security checks, then forwards it to the upstream LiteLLM server using httpx (an HTTP client). If the request is streaming, it buffers the full response internally before returning it.
+
+The OpenAI endpoint (`/v1/chat/completions`) uses the LiteLLM library to translate and route. It can work with or without an upstream LiteLLM server.
 
 **Key code patterns you'll see:**
 
@@ -311,11 +362,18 @@ async def attach_request_id(request: Request, call_next):
 - `call_next` — Passes the request to the next handler in the chain.
 
 ```python
-@app.post("/v1/chat/completions")
-async def chat_completions(request: Request, body: ChatCompletionRequest):
+@app.post("/v1/messages")
+async def anthropic_messages(request: Request):
 ```
 - `@app.post(...)` — This function handles HTTP POST requests to that specific URL.
-- `body: ChatCompletionRequest` — FastAPI automatically parses the JSON body and validates it against the Pydantic model. If it's invalid, FastAPI returns a 422 error before this function even starts.
+- The body is parsed manually with `await request.json()` because Anthropic requests have a different shape than OpenAI ones.
+
+```python
+async with httpx.AsyncClient(timeout=httpx.Timeout(LLM_TIMEOUT_S)) as client:
+    upstream_resp = await client.post(upstream_url, json=body, headers=upstream_headers)
+```
+- This is how the Anthropic endpoint forwards requests to LiteLLM — it makes an HTTP POST request, just like curl does, but from Python code.
+- `async with` ensures the HTTP connection is properly closed when done.
 
 ```python
 await asyncio.wait_for(
@@ -525,9 +583,13 @@ When the circuit is OPEN (Nexus is unreachable), we **block** any response that 
 ```python
 class Settings:
     OPENAI_API_KEY: str = os.environ.get("OPENAI_API_KEY", "")
+    LITELLM_API_BASE: str = os.environ.get("LITELLM_API_BASE", "")
+    LITELLM_API_KEY: str = os.environ.get("LITELLM_API_KEY", "")
 ```
 
 `os.environ.get("KEY", "")` — read the environment variable named "KEY". If it doesn't exist, return empty string as the default.
+
+The most important settings here are `LITELLM_API_BASE` and `LITELLM_API_KEY` — these tell the proxy where the upstream LiteLLM server is and how to authenticate to it.
 
 **Why environment variables instead of a config file?**
 - Config files get committed to git accidentally → credential leak
@@ -731,7 +793,16 @@ export $(grep -v '^#' .env | xargs)
 .venv/bin/uvicorn src.proxy.main:app --port 8080 --reload
 ```
 
-### Sending a test request
+### Sending a test request (Anthropic format — what Claude Code uses)
+```bash
+curl -X POST http://localhost:8080/v1/messages \
+  -H "x-api-key: dev-local-key-1234" \
+  -H "anthropic-version: 2023-06-01" \
+  -H "Content-Type: application/json" \
+  -d '{"model": "claude-sonnet-4-6", "max_tokens": 100, "messages": [{"role": "user", "content": "Hello"}]}'
+```
+
+### Sending a test request (OpenAI format)
 ```bash
 curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Authorization: Bearer dev-local-key-1234" \
@@ -771,9 +842,19 @@ grep '"action":"BLOCKED"' logs/audit.jsonl | python3 -m json.tool
 The best way to truly understand this codebase:
 
 1. Open `src/proxy/main.py`
-2. Start at the first line of the `chat_completions()` function
+2. Start at the first line of the `anthropic_messages()` function (this is the primary endpoint)
 3. Every time it calls another function, open that file and read what it does
 4. When that function returns, go back to `main.py` and see what happens next
 5. Follow the flow all the way to the final response
 
 By the end of one trace, you will have visited every file in the project. Do this once, and you'll be able to navigate independently.
+
+### How Users Connect
+
+When a user (developer with Claude Code) runs this:
+```bash
+export ANTHROPIC_BASE_URL="http://proxy-server:8080"
+export ANTHROPIC_AUTH_TOKEN="their-proxy-key"
+```
+
+The Anthropic SDK inside Claude Code reads those variables. When Claude Code makes a request, the SDK sends it to `http://proxy-server:8080/v1/messages` with `x-api-key: their-proxy-key` instead of sending it to Anthropic directly. The proxy does its work, forwards to LiteLLM, and returns the result. Claude Code doesn't know anything changed.
