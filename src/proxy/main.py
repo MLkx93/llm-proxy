@@ -1,18 +1,21 @@
 import uuid
 import time
+import hashlib
 import asyncio
 import litellm
+import httpx
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from .models import ChatCompletionRequest, ErrorResponse, ErrorDetail
+from .models import AnthropicErrorResponse, AnthropicErrorDetail
 from .logging import get_logger
-from .auth import validate
+from .auth import validate, validate_api_key
 from .rate_limiter import is_allowed
 from src.input_policy import engine as input_policy
 from src.output_security import engine as output_security
-from src.output_security.engine import extract_response_text
+from src.output_security.engine import extract_response_text, extract_response_text_anthropic
 from config.settings import settings
 from src.audit import logger as audit
 
@@ -127,6 +130,9 @@ async def chat_completions(request: Request, body: ChatCompletionRequest):
             max_tokens=body.max_tokens,
         )
         if settings.LITELLM_API_BASE:
+            # When routing through a LiteLLM proxy, force OpenAI-compatible
+            # format by prefixing the model name with "openai/"
+            llm_kwargs["model"] = f"openai/{body.model}"
             llm_kwargs["api_base"] = settings.LITELLM_API_BASE
             llm_kwargs["api_key"] = settings.LITELLM_API_KEY
 
@@ -151,7 +157,7 @@ async def chat_completions(request: Request, body: ChatCompletionRequest):
             block_code="LLM_ERROR",
             latency_ms=_elapsed(start),
         )
-        return _block("LLM_ERROR", "Upstream LLM call failed.", request_id, 502)
+        return _block("LLM_ERROR", f"Upstream LLM call failed: {exc}", request_id, 502)
 
     # --- Output Security Engine (with timeout) ---
     response_dict = response.model_dump()
@@ -213,3 +219,254 @@ def _block(code: str, message: str, request_id: str, status: int = 400) -> JSONR
             error=ErrorDetail(code=code, message=message, request_id=request_id)
         ).model_dump(),
     )
+
+
+# ---------------------------------------------------------------------------
+# Anthropic error type mapping
+# ---------------------------------------------------------------------------
+_ANTHROPIC_ERROR_TYPE = {
+    400: "invalid_request_error",
+    401: "authentication_error",
+    429: "rate_limit_error",
+    502: "api_error",
+    504: "api_error",
+}
+
+
+def _anthropic_block(code: str, message: str, status: int = 400) -> JSONResponse:
+    """Return an error in the format the Anthropic SDK expects."""
+    error_type = _ANTHROPIC_ERROR_TYPE.get(status, "invalid_request_error")
+    return JSONResponse(
+        status_code=status,
+        content=AnthropicErrorResponse(
+            error=AnthropicErrorDetail(type=error_type, message=f"[{code}] {message}")
+        ).model_dump(),
+    )
+
+
+def _hash_text(text: str) -> str:
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+async def _buffer_sse_response(sse_response: httpx.Response) -> dict:
+    """
+    Buffer an SSE stream from the upstream LiteLLM server and reassemble
+    into a complete Anthropic response dict.
+
+    SSE format: lines of 'event: ...' and 'data: {...}'.
+    We collect content_block_delta events to reconstruct the full text,
+    then use the message_stop/message_delta event for final metadata.
+    """
+    import json as _json
+
+    full_text = []
+    final_response = {}
+    model = ""
+    msg_id = ""
+    input_tokens = 0
+    output_tokens = 0
+    stop_reason = None
+
+    async for line in sse_response.aiter_lines():
+        if not line.startswith("data: "):
+            continue
+        data_str = line[6:]  # strip "data: "
+        if data_str.strip() == "[DONE]":
+            break
+        try:
+            chunk = _json.loads(data_str)
+        except _json.JSONDecodeError:
+            continue
+
+        event_type = chunk.get("type", "")
+
+        if event_type == "message_start":
+            msg = chunk.get("message", {})
+            msg_id = msg.get("id", "")
+            model = msg.get("model", "")
+            usage = msg.get("usage", {})
+            input_tokens = usage.get("input_tokens", 0)
+
+        elif event_type == "content_block_delta":
+            delta = chunk.get("delta", {})
+            if delta.get("type") == "text_delta":
+                full_text.append(delta.get("text", ""))
+
+        elif event_type == "message_delta":
+            delta = chunk.get("delta", {})
+            stop_reason = delta.get("stop_reason")
+            usage = chunk.get("usage", {})
+            output_tokens = usage.get("output_tokens", 0)
+
+    # Reassemble into a standard Anthropic non-streamed response
+    final_response = {
+        "id": msg_id,
+        "type": "message",
+        "role": "assistant",
+        "content": [{"type": "text", "text": "".join(full_text)}],
+        "model": model,
+        "stop_reason": stop_reason or "end_turn",
+        "stop_sequence": None,
+        "usage": {
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+        },
+    }
+    return final_response
+
+
+# ---------------------------------------------------------------------------
+# Anthropic Messages API Gateway — POST /v1/messages
+# ---------------------------------------------------------------------------
+
+@app.post("/v1/messages")
+async def anthropic_messages(request: Request):
+    request_id = request.state.request_id
+    start = time.monotonic()
+
+    # --- Authentication (x-api-key header) ---
+    key_entry = validate_api_key(request.headers.get("x-api-key"))
+    if key_entry is None:
+        logger.warning("unauthorized", extra={"request_id": request_id})
+        audit.emit(request_id=request_id, app_id=None, action="BLOCKED", block_code="UNAUTHORIZED")
+        return _anthropic_block("UNAUTHORIZED", "Missing or invalid API key.", 401)
+
+    app_id = key_entry.app_id
+    request.state.app_id = app_id
+
+    # --- Rate limiting ---
+    if not is_allowed(app_id):
+        logger.warning("rate_limited", extra={"request_id": request_id, "app_id": app_id})
+        audit.emit(request_id=request_id, app_id=app_id, action="BLOCKED", block_code="RATE_LIMITED")
+        return _anthropic_block("RATE_LIMITED", "Too many requests. Please slow down.", 429)
+
+    # --- Parse body ---
+    body = await request.json()
+    model = body.get("model", "")
+    is_streaming = body.get("stream", False)
+
+    logger.info("request_received", extra={
+        "request_id": request_id,
+        "app_id": app_id,
+        "model": model,
+        "message_count": len(body.get("messages", [])),
+        "endpoint": "/v1/messages",
+        "stream": is_streaming,
+    })
+
+    # --- Input Policy Engine ---
+    prompt_text = input_policy.extract_text_anthropic(body)
+    policy = input_policy.check_text(prompt_text)
+    p_hash = _hash_text(prompt_text)
+
+    if not policy.allowed:
+        logger.warning("input_blocked", extra={
+            "request_id": request_id,
+            "app_id": app_id,
+            "block_code": policy.block_code,
+            "findings": policy.findings,
+        })
+        audit.emit(
+            request_id=request_id, app_id=app_id, action="BLOCKED",
+            model=model, block_code=policy.block_code,
+            prompt_hash=p_hash, latency_ms=_elapsed(start),
+        )
+        return _anthropic_block(policy.block_code, policy.block_reason, 400)
+
+    # --- Forward to upstream LiteLLM server ---
+    if not settings.LITELLM_API_BASE:
+        audit.emit(
+            request_id=request_id, app_id=app_id, action="ERROR",
+            model=model, block_code="NO_UPSTREAM",
+            prompt_hash=p_hash, latency_ms=_elapsed(start),
+        )
+        return _anthropic_block("NO_UPSTREAM", "No upstream LLM server configured.", 502)
+
+    upstream_url = f"{settings.LITELLM_API_BASE.rstrip('/')}/v1/messages"
+    upstream_headers = {
+        "content-type": "application/json",
+        "anthropic-version": request.headers.get("anthropic-version", "2023-06-01"),
+        "x-api-key": settings.LITELLM_API_KEY,
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(LLM_TIMEOUT_S)) as client:
+            if is_streaming:
+                # Buffer the SSE stream internally
+                async with client.stream(
+                    "POST", upstream_url, json=body, headers=upstream_headers,
+                ) as sse_response:
+                    if sse_response.status_code != 200:
+                        error_body = await sse_response.aread()
+                        raise Exception(f"Upstream returned {sse_response.status_code}: {error_body.decode()}")
+                    response_dict = await _buffer_sse_response(sse_response)
+            else:
+                upstream_resp = await client.post(
+                    upstream_url, json=body, headers=upstream_headers,
+                )
+                if upstream_resp.status_code != 200:
+                    raise Exception(f"Upstream returned {upstream_resp.status_code}: {upstream_resp.text}")
+                response_dict = upstream_resp.json()
+
+    except httpx.TimeoutException:
+        logger.error("llm_timeout", extra={"request_id": request_id, "app_id": app_id})
+        audit.emit(
+            request_id=request_id, app_id=app_id, action="ERROR",
+            model=model, block_code="LLM_TIMEOUT",
+            prompt_hash=p_hash, latency_ms=_elapsed(start),
+        )
+        return _anthropic_block("LLM_TIMEOUT", "LLM provider did not respond in time.", 504)
+    except Exception as exc:
+        logger.error("llm_error", extra={"request_id": request_id, "app_id": app_id, "error": str(exc)})
+        audit.emit(
+            request_id=request_id, app_id=app_id, action="ERROR",
+            model=model, block_code="LLM_ERROR",
+            prompt_hash=p_hash, latency_ms=_elapsed(start),
+        )
+        return _anthropic_block("LLM_ERROR", f"Upstream LLM call failed: {exc}", 502)
+
+    # --- Output Security Engine ---
+    response_text = extract_response_text_anthropic(response_dict)
+    try:
+        output_policy = await asyncio.wait_for(
+            output_security.check(response_text),
+            timeout=OUTPUT_CHECK_TIMEOUT_S,
+        )
+    except asyncio.TimeoutError:
+        logger.error("output_check_timeout", extra={"request_id": request_id, "app_id": app_id})
+        audit.emit(
+            request_id=request_id, app_id=app_id, action="BLOCKED",
+            model=model, block_code="NEXUS_UNAVAILABLE",
+            prompt_hash=p_hash, latency_ms=_elapsed(start),
+        )
+        return _anthropic_block("NEXUS_UNAVAILABLE", "Dependency validation timed out.", 400)
+
+    if not output_policy.allowed:
+        logger.warning("output_blocked", extra={
+            "request_id": request_id,
+            "app_id": app_id,
+            "block_code": output_policy.block_code,
+            "blocked_packages": output_policy.blocked_packages,
+        })
+        audit.emit(
+            request_id=request_id, app_id=app_id, action="BLOCKED",
+            model=model, block_code=output_policy.block_code,
+            prompt_hash=p_hash, latency_ms=_elapsed(start),
+        )
+        return _anthropic_block(output_policy.block_code, output_policy.block_reason, 400)
+
+    # --- Success ---
+    latency_ms = _elapsed(start)
+    logger.info("request_completed", extra={
+        "request_id": request_id,
+        "app_id": app_id,
+        "model": model,
+        "latency_ms": latency_ms,
+        "endpoint": "/v1/messages",
+    })
+    audit.emit(
+        request_id=request_id, app_id=app_id, action="ALLOWED",
+        model=model, prompt_hash=p_hash, latency_ms=latency_ms,
+    )
+
+    return JSONResponse(content=response_dict)

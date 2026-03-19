@@ -59,11 +59,19 @@ def emit(
     model: Optional[str] = None,
     block_code: Optional[str] = None,
     latency_ms: Optional[int] = None,
+    prompt_hash: Optional[str] = None,
 ) -> None:
     """
     Write a single audit event. Safe to call from async context —
     the file write is synchronous but brief (append-only, no seek).
+
+    If prompt_hash is provided, it's used directly (for Anthropic-format requests
+    where messages are pre-extracted). Otherwise, computed from messages.
     """
+    computed_hash = prompt_hash
+    if computed_hash is None and messages:
+        computed_hash = _hash_messages(messages)
+
     event = {
         "timestamp": _now(),
         "request_id": request_id,
@@ -71,7 +79,7 @@ def emit(
         "action": action,
         "block_code": block_code,
         "model": model,
-        "prompt_hash": _hash_messages(messages) if messages else None,
+        "prompt_hash": computed_hash,
         "latency_ms": latency_ms,
     }
     try:

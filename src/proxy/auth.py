@@ -80,6 +80,17 @@ def validate(authorization_header: Optional[str]) -> Optional[ApiKeyEntry]:
     return _registry.get(h)
 
 
+def validate_api_key(raw_key: Optional[str]) -> Optional[ApiKeyEntry]:
+    """
+    Validate a raw API key (from x-api-key header).
+    Same registry lookup as validate(), but skips Bearer parsing.
+    """
+    if not raw_key:
+        return None
+    h = _hash(raw_key.strip())
+    return _registry.get(h)
+
+
 def reload() -> None:
     """Force reload of the registry (useful for testing)."""
     global _registry

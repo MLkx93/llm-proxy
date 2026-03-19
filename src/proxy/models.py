@@ -23,3 +23,15 @@ class ErrorDetail(BaseModel):
 
 class ErrorResponse(BaseModel):
     error: ErrorDetail
+
+
+# --- Anthropic-format error models ---
+
+class AnthropicErrorDetail(BaseModel):
+    type: str          # e.g. "invalid_request_error", "authentication_error"
+    message: str
+
+
+class AnthropicErrorResponse(BaseModel):
+    type: str = "error"
+    error: AnthropicErrorDetail

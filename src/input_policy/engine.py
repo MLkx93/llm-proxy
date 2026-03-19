@@ -48,17 +48,49 @@ class PolicyResult:
 
 
 def _extract_text(messages: list[dict]) -> str:
-    """Concatenate all message contents into a single string for analysis."""
+    """Concatenate all message contents into a single string for analysis (OpenAI format)."""
     return "\n".join(m.get("content", "") for m in messages)
 
 
-def check(messages: list[dict]) -> PolicyResult:
-    """
-    Run all input checks. Returns the first policy violation found,
-    or an allowed result if everything is clean.
-    """
-    text = _extract_text(messages)
+def _extract_content_block_text(content) -> str:
+    """Extract text from a content field that may be a string or list of blocks."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for block in content:
+            if isinstance(block, dict) and block.get("type") == "text":
+                parts.append(block.get("text", ""))
+        return "\n".join(parts)
+    return ""
 
+
+def extract_text_anthropic(body: dict) -> str:
+    """
+    Extract all scannable text from an Anthropic Messages API request body.
+    Handles system (string or content blocks) and messages with string or block content.
+    """
+    parts = []
+
+    # System prompt (top-level, can be string or list of content blocks)
+    system = body.get("system")
+    if system:
+        parts.append(_extract_content_block_text(system))
+
+    # Messages
+    for msg in body.get("messages", []):
+        text = _extract_content_block_text(msg.get("content", ""))
+        if text:
+            parts.append(text)
+
+    return "\n".join(parts)
+
+
+def check_text(text: str) -> PolicyResult:
+    """
+    Core policy check on pre-extracted text.
+    Returns the first violation found, or allowed if clean.
+    """
     # --- 1. Secret / credential detection (fast regex, runs first) ---
     secrets = find_secrets(text)
     if secrets:
@@ -96,3 +128,11 @@ def check(messages: list[dict]) -> PolicyResult:
         )
 
     return PolicyResult(allowed=True)
+
+
+def check(messages: list[dict]) -> PolicyResult:
+    """
+    Run all input checks on OpenAI-format messages.
+    Delegates to check_text() after extraction.
+    """
+    return check_text(_extract_text(messages))

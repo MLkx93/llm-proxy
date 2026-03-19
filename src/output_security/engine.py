@@ -56,8 +56,20 @@ async def check(response_text: str) -> OutputPolicyResult:
 
 
 def extract_response_text(llm_response: dict) -> str:
-    """Pull the assistant message content from a LiteLLM response dict."""
+    """Pull the assistant message content from a LiteLLM/OpenAI response dict."""
     try:
         return llm_response["choices"][0]["message"]["content"] or ""
     except (KeyError, IndexError, TypeError):
+        return ""
+
+
+def extract_response_text_anthropic(response: dict) -> str:
+    """Pull text from an Anthropic Messages API response dict."""
+    try:
+        parts = []
+        for block in response.get("content", []):
+            if block.get("type") == "text":
+                parts.append(block.get("text", ""))
+        return "\n".join(parts)
+    except (TypeError, AttributeError):
         return ""
