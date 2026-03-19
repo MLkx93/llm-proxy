@@ -400,7 +400,13 @@ async def anthropic_messages(request: Request):
     start = time.monotonic()
 
     # --- Authentication (pass-through: user's LiteLLM key) ---
+    # Check both x-api-key and authorization headers (different SDKs use different headers)
     user_api_key = request.headers.get("x-api-key", "")
+    if not user_api_key:
+        # Anthropic SDK sends Authorization: Bearer when ANTHROPIC_API_KEY is set
+        auth_header = request.headers.get("authorization", "")
+        if auth_header.lower().startswith("bearer "):
+            user_api_key = auth_header[7:].strip()
     if not user_api_key:
         logger.warning("unauthorized", extra={"request_id": request_id})
         audit.emit(request_id=request_id, app_id=None, action="BLOCKED", block_code="UNAUTHORIZED")
@@ -432,6 +438,7 @@ async def anthropic_messages(request: Request):
 
     # --- Input Policy Engine ---
     prompt_text = input_policy.extract_text_anthropic(body)
+    logger.info("scan_debug", extra={"request_id": request_id, "scanned_text_length": len(prompt_text), "scanned_text_full": prompt_text[:3000]})
     policy = input_policy.check_text(prompt_text)
     p_hash = _hash_text(prompt_text)
 

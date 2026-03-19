@@ -13,4 +13,6 @@
 | 2026-03-19 | Tests mocked Anthropic-format upstream responses but code now translates from OpenAI format | When changing the forwarding mechanism, update test mocks to match the new upstream response format |
 | 2026-03-19 | Built separate proxy auth (api_keys.yaml) when users already have LiteLLM keys | Ask about auth model early — don't add complexity users don't need. Pass-through auth when the upstream already handles it. |
 | 2026-03-19 | Trailing space in .env LITELLM_API_KEY caused "Invalid API key" — invisible but fatal | Always strip whitespace from .env values. Add .env format validation or trim keys in settings.py at load time. |
+| 2026-03-19 | Claude Code sends Authorization: Bearer (not x-api-key) — proxy rejected it | Accept both x-api-key and Authorization: Bearer headers on the Anthropic endpoint |
+| 2026-03-19 | Presidio flagged PERSON and URL in Claude Code's system prompt — false positive blocking all requests | Only scan user messages, not system prompts or assistant messages. System prompts are tool-generated and full of URLs/names. |
 

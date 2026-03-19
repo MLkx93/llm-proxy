@@ -199,19 +199,29 @@ async def test_injection_blocked(client):
 
 
 # ---------------------------------------------------------------------------
-# PII in system prompt → blocked
+# System prompt is NOT scanned (tool-generated, not user input)
 # ---------------------------------------------------------------------------
 @pytest.mark.asyncio
-async def test_pii_in_system_blocked(client):
+async def test_system_prompt_not_scanned(client):
+    """System prompts may contain URLs and names (e.g. Claude Code's system prompt).
+    These are tool-generated, not user input, so they should not trigger PII blocking."""
     body = {
         "model": "claude-sonnet-4-6",
         "max_tokens": 100,
         "system": "You work for John, contact him at john@secret.internal",
         "messages": [{"role": "user", "content": "Hello"}],
     }
-    response = await client.post("/v1/messages", json=body, headers=AUTH)
-    assert response.status_code == 400
-    assert "BLOCKED_PII" in response.json()["error"]["message"]
+    resp_body = _openai_response("Hi there!")
+    with patch("src.proxy.main.httpx.AsyncClient") as mock_client_cls:
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.post = AsyncMock(return_value=_mock_httpx_response(resp_body))
+        mock_client_cls.return_value = mock_client
+
+        response = await client.post("/v1/messages", json=body, headers=AUTH)
+
+    assert response.status_code == 200
 
 
 # ---------------------------------------------------------------------------

@@ -4,6 +4,7 @@ Input Policy Engine.
 Analyses all prompt messages before they reach LiteLLM.
 Returns a PolicyResult indicating whether the request is safe to proceed.
 """
+import re
 from dataclasses import dataclass, field
 from functools import lru_cache
 
@@ -11,6 +12,11 @@ from presidio_analyzer import AnalyzerEngine
 
 from .patterns import find_secrets
 from .injection import find_injections
+
+# Strip all XML-like tag blocks injected by tools (e.g. Claude Code).
+# These contain URLs, names, emails, file paths that trigger false positives.
+# Matches <tag-name>...content...</tag-name> and self-closing <tag-name ... />
+_TOOL_TAG_RE = re.compile(r"<[a-zA-Z_-]+[^>]*>.*?</[a-zA-Z_-]+>", re.DOTALL)
 
 
 # Presidio entity types we care about.
@@ -67,23 +73,41 @@ def _extract_content_block_text(content) -> str:
 
 def extract_text_anthropic(body: dict) -> str:
     """
-    Extract all scannable text from an Anthropic Messages API request body.
-    Handles system (string or content blocks) and messages with string or block content.
+    Extract scannable text from an Anthropic Messages API request body.
+    Only scans the LAST user content block from the LAST user message.
+
+    Why:
+    - System prompts are tool-generated (URLs, names) → false positives
+    - Assistant messages are AI-generated → not user input
+    - Previous user messages were already scanned when they were first sent
+    - Claude Code may bundle multiple user turns into a single message
+      separated by content blocks — we only scan the last block
     """
-    parts = []
+    messages = body.get("messages", [])
 
-    # System prompt (top-level, can be string or list of content blocks)
-    system = body.get("system")
-    if system:
-        parts.append(_extract_content_block_text(system))
+    # Find the last user message
+    for msg in reversed(messages):
+        if msg.get("role") != "user":
+            continue
 
-    # Messages
-    for msg in body.get("messages", []):
-        text = _extract_content_block_text(msg.get("content", ""))
-        if text:
-            parts.append(text)
+        content = msg.get("content", "")
 
-    return "\n".join(parts)
+        # If content is a list of blocks, only scan the last text block
+        if isinstance(content, list):
+            for block in reversed(content):
+                if isinstance(block, dict) and block.get("type") == "text":
+                    return block.get("text", "")
+            return ""
+
+        # If content is a string, only scan the last segment
+        # (Claude Code separates turns with double newlines)
+        if isinstance(content, str):
+            segments = content.split("\n\n")
+            return segments[-1].strip() if segments else ""
+
+        return ""
+
+    return ""
 
 
 def check_text(text: str) -> PolicyResult:
@@ -91,6 +115,9 @@ def check_text(text: str) -> PolicyResult:
     Core policy check on pre-extracted text.
     Returns the first violation found, or allowed if clean.
     """
+    # Strip tool-generated tags (e.g. <system-reminder>) that cause false positives
+    text = _TOOL_TAG_RE.sub("", text).strip()
+
     # --- 1. Secret / credential detection (fast regex, runs first) ---
     secrets = find_secrets(text)
     if secrets:

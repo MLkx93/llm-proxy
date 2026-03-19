@@ -51,22 +51,24 @@ class TestExtractTextAnthropic:
         }
         assert extract_text_anthropic(body) == "What is 2+2?"
 
-    def test_system_string(self):
+    def test_system_string_excluded(self):
+        """System prompts are excluded from scanning (tool-generated, not user input)."""
         body = {
             "system": "You are helpful",
             "messages": [{"role": "user", "content": "Hi"}],
         }
         result = extract_text_anthropic(body)
-        assert "You are helpful" in result
+        assert "You are helpful" not in result
         assert "Hi" in result
 
-    def test_system_as_content_blocks(self):
+    def test_system_as_content_blocks_excluded(self):
+        """System prompts as content blocks are also excluded."""
         body = {
             "system": [{"type": "text", "text": "Be concise"}],
             "messages": [{"role": "user", "content": "Hello"}],
         }
         result = extract_text_anthropic(body)
-        assert "Be concise" in result
+        assert "Be concise" not in result
         assert "Hello" in result
 
     def test_content_blocks_in_messages(self):
@@ -84,6 +86,7 @@ class TestExtractTextAnthropic:
         assert extract_text_anthropic(body) == "Look at this"
 
     def test_multi_turn(self):
+        """Only the last user message is scanned (previous ones were already checked)."""
         body = {
             "messages": [
                 {"role": "user", "content": "What is Python?"},
@@ -92,9 +95,9 @@ class TestExtractTextAnthropic:
             ],
         }
         result = extract_text_anthropic(body)
-        assert "What is Python?" in result
-        assert "A programming language." in result
-        assert "Tell me more." in result
+        assert "What is Python?" not in result
+        assert "A programming language." not in result
+        assert result == "Tell me more."
 
     def test_empty_body(self):
         assert extract_text_anthropic({}) == ""
