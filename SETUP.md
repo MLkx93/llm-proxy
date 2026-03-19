@@ -126,12 +126,20 @@ LITELLM_API_KEY=cr_your_full_key_here
 
 Replace with the actual values you were given. This is the same info that was originally in your `ANTHROPIC_BASE_URL` and `ANTHROPIC_AUTH_TOKEN` — but now the proxy holds them instead of the user.
 
+**IMPORTANT: Include `/api` in the URL.** If you were given `http://litellm.internal.example:3115`, add `/api` at the end. Without it, the proxy will get 404 errors because the LiteLLM routes live under `/api/v1/...`.
+
 **How to verify your LiteLLM key works** (test it directly before blaming the proxy):
 ```bash
+# Step 1: Check if the URL is correct (should return a list of models)
 curl -s http://litellm.internal.example:3115/api/v1/models \
   -H "x-api-key: cr_your_full_key_here"
+
+# Step 2: If Step 1 returns "Route not found", try without /api:
+curl -s http://litellm.internal.example:3115/v1/models \
+  -H "x-api-key: cr_your_full_key_here"
+# Whichever works is your correct LITELLM_API_BASE
 ```
-If this returns a list of models, the key is correct. If it returns "Invalid API key", the key is wrong — go back to whoever gave it to you.
+If both return "Invalid API key", the key itself is wrong — go back to whoever gave it to you.
 
 #### 3b. Direct Provider Keys (OPTIONAL — only if not using LiteLLM)
 
@@ -261,6 +269,8 @@ INFO:     Started reloader process
 
 `--reload` means the server auto-restarts when you edit code (dev mode only).
 
+**Important:** `--reload` only watches for Python file changes, NOT `.env` changes. If you edit `.env`, you must stop the server (`Ctrl+C`) and restart it with the `export` command again.
+
 ---
 
 ## Step 7: Test It
@@ -278,12 +288,24 @@ curl -X POST http://localhost:8080/v1/messages \
   -H "anthropic-version: 2023-06-01" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "claude-sonnet-4-6",
+    "model": "claude-sonnet-4-5-20250929",
     "max_tokens": 100,
     "messages": [{"role": "user", "content": "What is 2+2?"}]
   }'
 ```
-Expected: A JSON response with the AI's answer.
+Expected: A JSON response in Anthropic format with `"type": "message"`.
+
+**The model name must match what your LiteLLM server has.** To check available models:
+```bash
+curl -s $LITELLM_API_BASE/v1/models -H "x-api-key: $LITELLM_API_KEY" | python3 -m json.tool
+```
+
+Available Claude models on our LiteLLM server:
+- `claude-sonnet-4-5-20250929`
+- `claude-opus-4-5-20251101`
+- `claude-haiku-4-5-20251001`
+- `claude-3-7-sonnet-20250219`
+- `claude-3-5-sonnet-20241022`
 
 ### 7c. Test the OpenAI endpoint
 ```bash
@@ -291,7 +313,7 @@ curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Authorization: Bearer dev-local-key-1234" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "gpt-4o",
+    "model": "claude-sonnet-4-5-20250929",
     "messages": [{"role": "user", "content": "What is 2+2?"}]
   }'
 ```
@@ -457,8 +479,17 @@ The proxy still works — it just can't validate code dependencies.
 ### "NO_UPSTREAM" error on /v1/messages
 `LITELLM_API_BASE` is not set in your `.env`. The Anthropic endpoint requires it because it forwards requests directly to the upstream server.
 
+### "Route /v1/messages not found" or "Route /v1/chat/completions not found"
+Your `LITELLM_API_BASE` is missing the `/api` path prefix. Change it from `http://litellm.internal.example:3115` to `http://litellm.internal.example:3115/api`. Then **restart the server** (Ctrl+C and re-run — `.env` changes are not auto-reloaded).
+
 ### "Invalid API key format" from upstream
 Your `LITELLM_API_KEY` in `.env` is wrong, truncated, or has extra quotes/spaces. Double-check the full key value.
+
+### Changed .env but proxy still uses old values
+The `--reload` flag only watches Python code changes. You must restart the server after editing `.env`:
+1. `Ctrl+C` to stop uvicorn
+2. `export $(grep -v '^#' .env | xargs)` to reload env vars
+3. Re-run the uvicorn command
 
 ---
 
