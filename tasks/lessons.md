@@ -11,4 +11,5 @@
 | 2026-03-19 | LITELLM_API_BASE was missing /api suffix — upstream returned 404 | Always verify the exact base URL by testing directly with curl before configuring the proxy |
 | 2026-03-19 | Assumed LiteLLM server exposes /v1/messages (Anthropic endpoint) — it only had /v1/chat/completions (OpenAI) | Never assume upstream API shape. Probe with curl /v1/models first, then check available routes |
 | 2026-03-19 | Tests mocked Anthropic-format upstream responses but code now translates from OpenAI format | When changing the forwarding mechanism, update test mocks to match the new upstream response format |
+| 2026-03-19 | Built separate proxy auth (api_keys.yaml) when users already have LiteLLM keys | Ask about auth model early — don't add complexity users don't need. Pass-through auth when the upstream already handles it. |
 

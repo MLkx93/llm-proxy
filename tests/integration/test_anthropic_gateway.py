@@ -16,9 +16,9 @@ from src.proxy.rate_limiter import reset as reset_bucket
 from src.output_security.nexus import ValidationResult
 
 
-# Auth headers (Anthropic style — x-api-key, not Bearer)
-AUTH = {"x-api-key": "dev-local-key-1234", "anthropic-version": "2023-06-01"}
-CI_AUTH = {"x-api-key": "ci-pipeline-key-5678", "anthropic-version": "2023-06-01"}
+# Auth headers (Anthropic style — x-api-key with user's LiteLLM key, pass-through auth)
+AUTH = {"x-api-key": "cr_test_key_1234", "anthropic-version": "2023-06-01"}
+CI_AUTH = {"x-api-key": "cr_test_key_5678", "anthropic-version": "2023-06-01"}
 
 SAFE_BODY = {
     "model": "claude-sonnet-4-6",
@@ -133,13 +133,13 @@ async def test_no_auth_returns_401(client):
 
 
 # ---------------------------------------------------------------------------
-# Auth: invalid x-api-key → 401
+# Auth: empty x-api-key → 401
 # ---------------------------------------------------------------------------
 @pytest.mark.asyncio
-async def test_invalid_key_returns_401(client):
+async def test_empty_key_returns_401(client):
     response = await client.post(
         "/v1/messages", json=SAFE_BODY,
-        headers={"x-api-key": "bad-key-999"},
+        headers={"x-api-key": "", "anthropic-version": "2023-06-01"},
     )
     assert response.status_code == 401
     data = response.json()

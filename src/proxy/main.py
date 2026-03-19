@@ -399,14 +399,15 @@ async def anthropic_messages(request: Request):
     request_id = request.state.request_id
     start = time.monotonic()
 
-    # --- Authentication (x-api-key header) ---
-    key_entry = validate_api_key(request.headers.get("x-api-key"))
-    if key_entry is None:
+    # --- Authentication (pass-through: user's LiteLLM key) ---
+    user_api_key = request.headers.get("x-api-key", "")
+    if not user_api_key:
         logger.warning("unauthorized", extra={"request_id": request_id})
         audit.emit(request_id=request_id, app_id=None, action="BLOCKED", block_code="UNAUTHORIZED")
-        return _anthropic_block("UNAUTHORIZED", "Missing or invalid API key.", 401)
+        return _anthropic_block("UNAUTHORIZED", "Missing API key.", 401)
 
-    app_id = key_entry.app_id
+    # Derive an app_id from the key for rate limiting and audit (hash to avoid logging raw keys)
+    app_id = f"key-{hashlib.sha256(user_api_key.encode()).hexdigest()[:12]}"
     request.state.app_id = app_id
 
     # --- Rate limiting ---
@@ -462,7 +463,7 @@ async def anthropic_messages(request: Request):
     upstream_url = f"{settings.LITELLM_API_BASE.rstrip('/')}/v1/chat/completions"
     upstream_headers = {
         "content-type": "application/json",
-        "x-api-key": settings.LITELLM_API_KEY,
+        "x-api-key": user_api_key,  # pass-through: user's own LiteLLM key
     }
 
     try:
