@@ -97,6 +97,18 @@
 - [x] 12 E2E tests covering all 12 block/allow scenarios from Context.md
 - [x] Final run: 96/96 tests passing
 
+## Phase 8: Anthropic Gateway & Live Integration ✅ COMPLETE
+
+- [x] Anthropic-format endpoint (`POST /v1/messages`) with format translation (Anthropic → OpenAI → LiteLLM → OpenAI → Anthropic)
+- [x] Pass-through auth: user sends their own LiteLLM key, proxy forwards it (no separate proxy keys needed)
+- [x] Accept both `x-api-key` and `Authorization: Bearer` headers (Anthropic SDK uses Bearer)
+- [x] SSE stream buffering for streamed responses
+- [x] Input policy: scan only last user message, strip tool-generated XML tags (Claude Code compatibility)
+- [x] Whitespace trimming on all env vars in settings.py
+- [x] Live-tested with Claude Code through LiteLLM server at litellm.internal.example:3115/api
+- [x] SETUP.md and GUIDE.md fully rewritten for transparent gateway architecture
+- [x] 138/138 tests passing (42 new Anthropic gateway tests)
+
 ---
 
 ## Decision Log
@@ -105,3 +117,7 @@
 |------|----------|-----------|
 | 2026-03-18 | Plan created | First session — no code yet |
 | 2026-03-18 | Phase 0 complete | All architectural decisions resolved before coding |
+| 2026-03-19 | Pass-through auth for /v1/messages | Users already have LiteLLM keys — no need for separate proxy keys |
+| 2026-03-19 | Anthropic→OpenAI format translation | LiteLLM server only exposes OpenAI-compatible endpoints |
+| 2026-03-19 | Scan only last user message | Claude Code sends full conversation history — rescanning old messages causes cascading blocks |
+| 2026-03-19 | Strip XML tags from scanned text | Claude Code injects system-reminder tags into user messages with URLs/names that trigger PII false positives |

@@ -438,7 +438,6 @@ async def anthropic_messages(request: Request):
 
     # --- Input Policy Engine ---
     prompt_text = input_policy.extract_text_anthropic(body)
-    logger.info("scan_debug", extra={"request_id": request_id, "scanned_text_length": len(prompt_text), "scanned_text_full": prompt_text[:3000]})
     policy = input_policy.check_text(prompt_text)
     p_hash = _hash_text(prompt_text)
 
