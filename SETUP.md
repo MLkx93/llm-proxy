@@ -18,21 +18,27 @@ That's all the user does. From that point, every request they make goes through 
 ```
 User's tool (Claude Code, etc.)
     │
-    │  Thinks it's talking to Anthropic
+    │  Sends Anthropic-format request to POST /v1/messages
+    │  (thinks it's talking to Anthropic)
     │
     ▼
 YOUR PROXY (http://localhost:8080)
-    │  Scans input → forwards → scans output
+    │  1. Scans input (PII, credentials, injection)
+    │  2. Translates Anthropic format → OpenAI format
+    │  3. Forwards to LiteLLM
+    │  4. Translates OpenAI response → Anthropic format
+    │  5. Scans output (dependency validation)
+    │  6. Returns to user
     ▼
 LiteLLM Server (http://litellm.internal.example:3115/api)
-    │
+    │  Only speaks OpenAI format (/v1/chat/completions)
     ▼
-Anthropic / OpenAI (actual AI provider)
+Anthropic / OpenAI / Google (actual AI provider)
 ```
 
 **Two endpoints:**
-- `POST /v1/messages` — Anthropic-format requests (what Claude Code uses)
-- `POST /v1/chat/completions` — OpenAI-format requests (for other tools)
+- `POST /v1/messages` — Anthropic-format requests (what Claude Code uses). The proxy translates to OpenAI format internally before forwarding to LiteLLM.
+- `POST /v1/chat/completions` — OpenAI-format requests (for other tools). Forwarded as-is.
 
 ---
 

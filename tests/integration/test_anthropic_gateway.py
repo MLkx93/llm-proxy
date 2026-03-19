@@ -45,6 +45,22 @@ def _anthropic_response(text: str) -> dict:
     }
 
 
+def _openai_response(text: str) -> dict:
+    """A valid OpenAI chat/completions response (what LiteLLM actually returns)."""
+    return {
+        "id": "chatcmpl-test123",
+        "object": "chat.completion",
+        "created": 1700000000,
+        "model": "claude-sonnet-4-6",
+        "choices": [{
+            "index": 0,
+            "message": {"role": "assistant", "content": text},
+            "finish_reason": "stop",
+        }],
+        "usage": {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30},
+    }
+
+
 def _mock_httpx_response(body: dict, status_code: int = 200) -> HttpxResponse:
     """Build a mock httpx.Response."""
     resp = HttpxResponse(
@@ -86,7 +102,7 @@ def client():
 # ---------------------------------------------------------------------------
 @pytest.mark.asyncio
 async def test_safe_request_forwarded(client):
-    resp_body = _anthropic_response("The answer is 4.")
+    resp_body = _openai_response("The answer is 4.")
     with patch("src.proxy.main.httpx.AsyncClient") as mock_client_cls:
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -225,7 +241,7 @@ async def test_pii_in_content_blocks_blocked(client):
 # ---------------------------------------------------------------------------
 @pytest.mark.asyncio
 async def test_unsafe_code_in_response_blocked(client):
-    code_response = _anthropic_response(
+    code_response = _openai_response(
         "Try this:\n```python\nimport evil_pkg\nevil_pkg.run()\n```"
     )
     with patch("src.proxy.main.httpx.AsyncClient") as mock_client_cls:
@@ -248,7 +264,7 @@ async def test_unsafe_code_in_response_blocked(client):
 # ---------------------------------------------------------------------------
 @pytest.mark.asyncio
 async def test_safe_code_approved(client):
-    code_response = _anthropic_response(
+    code_response = _openai_response(
         "```python\nimport requests\nrequests.get('https://example.com')\n```"
     )
     with patch("src.proxy.main.httpx.AsyncClient") as mock_client_cls:
@@ -271,7 +287,7 @@ async def test_safe_code_approved(client):
 # ---------------------------------------------------------------------------
 @pytest.mark.asyncio
 async def test_plain_text_skips_nexus(client):
-    text_response = _anthropic_response("The answer is 4, no code needed.")
+    text_response = _openai_response("The answer is 4, no code needed.")
     with patch("src.proxy.main.httpx.AsyncClient") as mock_client_cls:
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -358,7 +374,7 @@ async def test_upstream_timeout_returns_504(client):
 # ---------------------------------------------------------------------------
 @pytest.mark.asyncio
 async def test_multiple_keys(client):
-    text_response = _anthropic_response("Hello!")
+    text_response = _openai_response("Hello!")
     with patch("src.proxy.main.httpx.AsyncClient") as mock_client_cls:
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)

@@ -316,6 +316,81 @@ async def _buffer_sse_response(sse_response: httpx.Response) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Anthropic ↔ OpenAI format translation
+# ---------------------------------------------------------------------------
+
+def _anthropic_to_openai(body: dict) -> dict:
+    """Translate an Anthropic Messages request into OpenAI chat/completions format."""
+    messages = []
+
+    # Anthropic "system" is a top-level field; OpenAI uses a system message
+    system = body.get("system")
+    if system:
+        if isinstance(system, str):
+            messages.append({"role": "system", "content": system})
+        elif isinstance(system, list):
+            # Anthropic system can be a list of content blocks
+            text = " ".join(b.get("text", "") for b in system if b.get("type") == "text")
+            if text:
+                messages.append({"role": "system", "content": text})
+
+    for msg in body.get("messages", []):
+        role = msg.get("role", "user")
+        content = msg.get("content", "")
+        if isinstance(content, str):
+            messages.append({"role": role, "content": content})
+        elif isinstance(content, list):
+            # Anthropic content blocks → concatenate text blocks
+            text = " ".join(b.get("text", "") for b in content if b.get("type") == "text")
+            messages.append({"role": role, "content": text})
+
+    openai_body: dict = {
+        "model": body.get("model", ""),
+        "messages": messages,
+        "stream": False,  # always buffer
+    }
+    if body.get("max_tokens"):
+        openai_body["max_tokens"] = body["max_tokens"]
+    if body.get("temperature") is not None:
+        openai_body["temperature"] = body["temperature"]
+    if body.get("top_p") is not None:
+        openai_body["top_p"] = body["top_p"]
+    if body.get("stop_sequences"):
+        openai_body["stop"] = body["stop_sequences"]
+    return openai_body
+
+
+def _openai_to_anthropic(openai_resp: dict, model: str) -> dict:
+    """Translate an OpenAI chat/completions response into Anthropic Messages format."""
+    choice = openai_resp.get("choices", [{}])[0]
+    message = choice.get("message", {})
+    text = message.get("content", "")
+    finish = choice.get("finish_reason", "stop")
+    usage = openai_resp.get("usage", {})
+
+    # Map OpenAI finish reasons to Anthropic stop reasons
+    stop_reason_map = {
+        "stop": "end_turn",
+        "length": "max_tokens",
+        "content_filter": "end_turn",
+    }
+
+    return {
+        "id": openai_resp.get("id", f"msg_{uuid.uuid4().hex[:24]}"),
+        "type": "message",
+        "role": "assistant",
+        "content": [{"type": "text", "text": text}],
+        "model": model,
+        "stop_reason": stop_reason_map.get(finish, "end_turn"),
+        "stop_sequence": None,
+        "usage": {
+            "input_tokens": usage.get("prompt_tokens", 0),
+            "output_tokens": usage.get("completion_tokens", 0),
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
 # Anthropic Messages API Gateway — POST /v1/messages
 # ---------------------------------------------------------------------------
 
@@ -373,7 +448,7 @@ async def anthropic_messages(request: Request):
         )
         return _anthropic_block(policy.block_code, policy.block_reason, 400)
 
-    # --- Forward to upstream LiteLLM server ---
+    # --- Forward to upstream LiteLLM server (OpenAI-compatible) ---
     if not settings.LITELLM_API_BASE:
         audit.emit(
             request_id=request_id, app_id=app_id, action="ERROR",
@@ -382,31 +457,22 @@ async def anthropic_messages(request: Request):
         )
         return _anthropic_block("NO_UPSTREAM", "No upstream LLM server configured.", 502)
 
-    upstream_url = f"{settings.LITELLM_API_BASE.rstrip('/')}/v1/messages"
+    # Translate Anthropic request → OpenAI format
+    openai_body = _anthropic_to_openai(body)
+    upstream_url = f"{settings.LITELLM_API_BASE.rstrip('/')}/v1/chat/completions"
     upstream_headers = {
         "content-type": "application/json",
-        "anthropic-version": request.headers.get("anthropic-version", "2023-06-01"),
         "x-api-key": settings.LITELLM_API_KEY,
     }
 
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(LLM_TIMEOUT_S)) as client:
-            if is_streaming:
-                # Buffer the SSE stream internally
-                async with client.stream(
-                    "POST", upstream_url, json=body, headers=upstream_headers,
-                ) as sse_response:
-                    if sse_response.status_code != 200:
-                        error_body = await sse_response.aread()
-                        raise Exception(f"Upstream returned {sse_response.status_code}: {error_body.decode()}")
-                    response_dict = await _buffer_sse_response(sse_response)
-            else:
-                upstream_resp = await client.post(
-                    upstream_url, json=body, headers=upstream_headers,
-                )
-                if upstream_resp.status_code != 200:
-                    raise Exception(f"Upstream returned {upstream_resp.status_code}: {upstream_resp.text}")
-                response_dict = upstream_resp.json()
+            upstream_resp = await client.post(
+                upstream_url, json=openai_body, headers=upstream_headers,
+            )
+            if upstream_resp.status_code != 200:
+                raise Exception(f"Upstream returned {upstream_resp.status_code}: {upstream_resp.text}")
+            openai_response = upstream_resp.json()
 
     except httpx.TimeoutException:
         logger.error("llm_timeout", extra={"request_id": request_id, "app_id": app_id})
@@ -424,6 +490,9 @@ async def anthropic_messages(request: Request):
             prompt_hash=p_hash, latency_ms=_elapsed(start),
         )
         return _anthropic_block("LLM_ERROR", f"Upstream LLM call failed: {exc}", 502)
+
+    # Translate OpenAI response → Anthropic format
+    response_dict = _openai_to_anthropic(openai_response, model)
 
     # --- Output Security Engine ---
     response_text = extract_response_text_anthropic(response_dict)
