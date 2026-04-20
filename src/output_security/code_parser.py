@@ -78,10 +78,16 @@ _GO_STDLIB_PREFIXES = {
 
 
 @dataclass(frozen=True)
+class Dependency:
+    name: str
+    source_type: str  # "python", "javascript", etc. — determines which repo to check
+
+
+@dataclass(frozen=True)
 class CodeBlock:
     language: str
     content: str
-    dependencies: list[str]
+    dependencies: list[Dependency]
 
 
 def _is_stdlib(lang: str, package: str) -> bool:
@@ -96,16 +102,56 @@ def _is_stdlib(lang: str, package: str) -> bool:
     return False
 
 
-def _extract_deps(lang: str, code: str) -> list[str]:
+def _extract_deps(lang: str, code: str) -> list[Dependency]:
+    """Extract dependencies from code, tagging each with its source type."""
+    # For shell/bash, we need to detect pip vs npm and tag accordingly
+    if lang in ("shell", "bash"):
+        return _extract_shell_deps(code)
+
     patterns = _EXTRACTORS.get(lang, [])
-    deps: set[str] = set()
+    deps: dict[str, str] = {}  # name -> source_type
     for pat in patterns:
         for match in pat.finditer(code):
             pkg = match.group(1).strip()
             if pkg and not _is_stdlib(lang, pkg):
                 # Normalise: take the top-level package name only
-                deps.add(pkg.split(".")[0])
-    return sorted(deps)
+                name = pkg.split(".")[0]
+                deps[name] = lang
+    return [Dependency(name=n, source_type=t) for n, t in sorted(deps.items())]
+
+
+def _extract_shell_deps(code: str) -> list[Dependency]:
+    """Extract deps from shell/bash, tagging pip packages as python, npm as javascript."""
+    deps: dict[str, str] = {}
+
+    # pip install -> python
+    # Match all tokens after "pip install", filter out flags (-r, --upgrade, etc.)
+    for match in re.finditer(r'pip\s+install\s+(.+?)(?:\n|$|&&|\|)', code, re.MULTILINE):
+        tokens = match.group(1).split()
+        for token in tokens:
+            # Skip flags and file paths
+            if token.startswith("-") or token.endswith(".txt") or "/" in token:
+                continue
+            pkg = re.match(r'^([\w\-]+)', token)
+            if pkg:
+                name = pkg.group(1)
+                if name and not _is_stdlib("python", name):
+                    deps[name] = "python"
+
+    # npm install -> javascript
+    for match in re.finditer(r'npm\s+install\s+(.+?)(?:\n|$|&&|\|)', code, re.MULTILINE):
+        tokens = match.group(1).split()
+        for token in tokens:
+            # Skip flags
+            if token.startswith("-"):
+                continue
+            pkg = re.match(r'^([\w\-@/]+)', token)
+            if pkg:
+                deps[pkg.group(1)] = "javascript"
+
+    # apt-get install -> skip (system packages, not in Nexus)
+
+    return [Dependency(name=n, source_type=t) for n, t in sorted(deps.items())]
 
 
 def extract_code_blocks(text: str) -> list[CodeBlock]:

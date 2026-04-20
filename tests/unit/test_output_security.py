@@ -22,27 +22,30 @@ class TestCodeParser:
         text = "```python\nimport requests\nfrom flask import Flask\n```"
         blocks = extract_code_blocks(text)
         assert len(blocks) == 1
-        assert "requests" in blocks[0].dependencies
-        assert "flask" in blocks[0].dependencies
+        dep_names = [d.name for d in blocks[0].dependencies]
+        assert "requests" in dep_names
+        assert "flask" in dep_names
 
     def test_python_stdlib_filtered_out(self):
         text = "```python\nimport os\nimport sys\nimport requests\n```"
         blocks = extract_code_blocks(text)
-        deps = blocks[0].dependencies
-        assert "os" not in deps
-        assert "sys" not in deps
-        assert "requests" in deps
+        dep_names = [d.name for d in blocks[0].dependencies]
+        assert "os" not in dep_names
+        assert "sys" not in dep_names
+        assert "requests" in dep_names
 
     def test_javascript_require_extracted(self):
         text = "```javascript\nconst axios = require('axios');\nconst _ = require('lodash');\n```"
         blocks = extract_code_blocks(text)
-        assert "axios" in blocks[0].dependencies
-        assert "lodash" in blocks[0].dependencies
+        dep_names = [d.name for d in blocks[0].dependencies]
+        assert "axios" in dep_names
+        assert "lodash" in dep_names
 
     def test_javascript_esm_import_extracted(self):
         text = "```javascript\nimport express from 'express';\n```"
         blocks = extract_code_blocks(text)
-        assert "express" in blocks[0].dependencies
+        dep_names = [d.name for d in blocks[0].dependencies]
+        assert "express" in dep_names
 
     def test_relative_imports_excluded(self):
         # './utils' and '../lib' are local — should not be flagged
@@ -68,7 +71,8 @@ class TestCodeParser:
     def test_pip_install_in_shell(self):
         text = "```shell\npip install requests\n```"
         blocks = extract_code_blocks(text)
-        assert "requests" in blocks[0].dependencies
+        dep_names = [d.name for d in blocks[0].dependencies]
+        assert "requests" in dep_names
 
     def test_extract_response_text(self):
         resp = {"choices": [{"message": {"content": "Hello!"}}]}

@@ -44,8 +44,11 @@ class TestHealthEndpoints:
 
     @pytest.mark.asyncio
     async def test_ready_without_nexus_config_returns_503(self, client):
-        # NEXUS_BASE_URL is empty in test env
+        import config.settings as s
+        original = s.settings.NEXUS_BASE_URL
+        s.settings.NEXUS_BASE_URL = ""
         response = await client.get("/ready")
+        s.settings.NEXUS_BASE_URL = original
         assert response.status_code == 503
         body = response.json()
         assert body["status"] == "not_ready"

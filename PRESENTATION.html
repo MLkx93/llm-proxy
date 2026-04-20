@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>LLM Security Proxy</title>
+  <style>
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+    /* CSS for syntax highlighting */
+    pre > code.sourceCode { white-space: pre; position: relative; }
+    pre > code.sourceCode > span { line-height: 1.25; }
+    pre > code.sourceCode > span:empty { height: 1.2em; }
+    .sourceCode { overflow: visible; }
+    code.sourceCode > span { color: inherit; text-decoration: inherit; }
+    div.sourceCode { margin: 1em 0; }
+    pre.sourceCode { margin: 0; }
+    @media screen {
+    div.sourceCode { overflow: auto; }
+    }
+    @media print {
+    pre > code.sourceCode { white-space: pre-wrap; }
+    pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+    }
+    pre.numberSource code
+      { counter-reset: source-line 0; }
+    pre.numberSource code > span
+      { position: relative; left: -4em; counter-increment: source-line; }
+    pre.numberSource code > span > a:first-child::before
+      { content: counter(source-line);
+        position: relative; left: -1em; text-align: right; vertical-align: baseline;
+        border: none; display: inline-block;
+        -webkit-touch-callout: none; -webkit-user-select: none;
+        -khtml-user-select: none; -moz-user-select: none;
+        -ms-user-select: none; user-select: none;
+        padding: 0 4px; width: 4em;
+        color: #aaaaaa;
+      }
+    pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+    div.sourceCode
+      {   }
+    @media screen {
+    pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+    }
+    code span.al { color: #ff0000; font-weight: bold; } /* Alert */
+    code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+    code span.at { color: #7d9029; } /* Attribute */
+    code span.bn { color: #40a070; } /* BaseN */
+    code span.bu { color: #008000; } /* BuiltIn */
+    code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+    code span.ch { color: #4070a0; } /* Char */
+    code span.cn { color: #880000; } /* Constant */
+    code span.co { color: #60a0b0; font-style: italic; } /* Comment */
+    code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+    code span.do { color: #ba2121; font-style: italic; } /* Documentation */
+    code span.dt { color: #902000; } /* DataType */
+    code span.dv { color: #40a070; } /* DecVal */
+    code span.er { color: #ff0000; font-weight: bold; } /* Error */
+    code span.ex { } /* Extension */
+    code span.fl { color: #40a070; } /* Float */
+    code span.fu { color: #06287e; } /* Function */
+    code span.im { color: #008000; font-weight: bold; } /* Import */
+    code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+    code span.kw { color: #007020; font-weight: bold; } /* Keyword */
+    code span.op { color: #666666; } /* Operator */
+    code span.ot { color: #007020; } /* Other */
+    code span.pp { color: #bc7a00; } /* Preprocessor */
+    code span.sc { color: #4070a0; } /* SpecialChar */
+    code span.ss { color: #bb6688; } /* SpecialString */
+    code span.st { color: #4070a0; } /* String */
+    code span.va { color: #19177c; } /* Variable */
+    code span.vs { color: #4070a0; } /* VerbatimString */
+    code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+  </style>
+  <link rel="stylesheet" href="-" />
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">LLM Security Proxy</h1>
+</header>
+<h1 id="llm-security-proxy-project-presentation">LLM Security Proxy —
+Project Presentation</h1>
+<p><strong>Author:</strong> Malak <strong>Date:</strong> March 2026
+<strong>Status:</strong> Production-Ready (138/138 tests passing)</p>
+<hr />
+<h2 id="executive-summary">Executive Summary</h2>
+<p>A transparent security gateway that sits between developers using
+Claude Code and the upstream LLM provider. It intercepts all requests,
+enforces security policies on both input and output, and only forwards
+safe traffic.</p>
+<p><strong>Key Achievement:</strong> Enables safe AI-assisted
+development by preventing credential leaks, blocking prompt injection
+attacks, and ensuring only approved dependencies are suggested.</p>
+<hr />
+<h2 id="architecture">Architecture</h2>
+<pre><code>┌─────────────────┐     ┌─────────────────────────────────────────┐     ┌──────────────┐
+│   Claude Code   │────▶│              LLM Security Proxy         │────▶│   LiteLLM    │
+│   (Developer)   │◀────│  Input Policy │ Forward │ Output Check  │◀────│   (Upstream) │
+└─────────────────┘     └─────────────────────────────────────────┘     └──────────────┘
+                                          │
+                                          ▼
+                                   ┌──────────────┐
+                                   │ Sonatype     │
+                                   │ Nexus        │
+                                   │ (Pkg Check)  │
+                                   └──────────────┘</code></pre>
+<p><strong>Request Flow:</strong> 1. <strong>Auth</strong> → Validate
+API key 2. <strong>Rate Limit</strong> → Per-app token bucket (60 burst,
+1/s sustained) 3. <strong>Input Policy</strong> → Scan for PII,
+credentials, prompt injection 4. <strong>Forward</strong> → Translate
+format, call upstream LLM 5. <strong>Output Security</strong> → Extract
+code blocks, validate packages against Nexus 6.
+<strong>Response</strong> → Return to client or block with error</p>
+<hr />
+<h2 id="security-features">Security Features</h2>
+<h3 id="input-policy-engine">Input Policy Engine</h3>
+<table>
+<colgroup>
+<col style="width: 18%" />
+<col style="width: 41%" />
+<col style="width: 39%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Threat</th>
+<th>Detection Method</th>
+<th>Example Blocked</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>PII Exposure</strong></td>
+<td>Microsoft Presidio</td>
+<td><code>Email me at john@company.com</code></td>
+</tr>
+<tr class="even">
+<td><strong>Credential Leak</strong></td>
+<td>11 regex patterns</td>
+<td><code>sk-proj-abc123...</code>, <code>AKIA...</code></td>
+</tr>
+<tr class="odd">
+<td><strong>Prompt Injection</strong></td>
+<td>8 heuristic patterns</td>
+<td><code>Ignore previous instructions...</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Patterns Detected:</strong> - OpenAI, Anthropic, GitHub, AWS
+keys - Bearer tokens, Basic auth - Private key blocks (RSA, EC, OpenSSH)
+- Connection strings (MongoDB, PostgreSQL, Redis) - Password
+assignments</p>
+<h3 id="output-security-engine">Output Security Engine</h3>
+<table>
+<colgroup>
+<col style="width: 29%" />
+<col style="width: 33%" />
+<col style="width: 37%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Check</th>
+<th>Action</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Unknown Package</strong></td>
+<td>Block response</td>
+<td><code>import evil_pkg</code> not in Nexus</td>
+</tr>
+<tr class="even">
+<td><strong>Nexus Unavailable</strong></td>
+<td>Fail-closed (block)</td>
+<td>Circuit breaker after 3 failures</td>
+</tr>
+<tr class="odd">
+<td><strong>Approved Package</strong></td>
+<td>Allow through</td>
+<td><code>import requests</code> found in Nexus</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Languages Supported:</strong> - Python (import, from…import,
+pip install) - JavaScript/TypeScript (require, import from, npm install)
+- Java (import statements) - Go (import blocks) - Ruby (require, gem) -
+Shell/Bash (pip install, npm install)</p>
+<hr />
+<h2 id="endpoints">Endpoints</h2>
+<table>
+<colgroup>
+<col style="width: 30%" />
+<col style="width: 24%" />
+<col style="width: 18%" />
+<col style="width: 27%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Endpoint</th>
+<th>Format</th>
+<th>Auth</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>POST /v1/messages</code></td>
+<td>Anthropic</td>
+<td>Pass-through</td>
+<td>Claude Code compatibility</td>
+</tr>
+<tr class="even">
+<td><code>POST /v1/chat/completions</code></td>
+<td>OpenAI</td>
+<td>Proxy keys</td>
+<td>Generic OpenAI clients</td>
+</tr>
+<tr class="odd">
+<td><code>GET /health</code></td>
+<td>-</td>
+<td>None</td>
+<td>Liveness probe</td>
+</tr>
+<tr class="even">
+<td><code>GET /ready</code></td>
+<td>-</td>
+<td>None</td>
+<td>Readiness probe (checks Nexus)</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="error-codes">Error Codes</h2>
+<table>
+<thead>
+<tr class="header">
+<th>Code</th>
+<th>HTTP</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>BLOCKED_PII</code></td>
+<td>400</td>
+<td>Personal information detected</td>
+</tr>
+<tr class="even">
+<td><code>BLOCKED_CREDENTIALS</code></td>
+<td>400</td>
+<td>API keys or secrets detected</td>
+</tr>
+<tr class="odd">
+<td><code>BLOCKED_INJECTION</code></td>
+<td>400</td>
+<td>Prompt injection attempt</td>
+</tr>
+<tr class="even">
+<td><code>BLOCKED_UNVALIDATED_DEP</code></td>
+<td>400</td>
+<td>Package not in approved Nexus repo</td>
+</tr>
+<tr class="odd">
+<td><code>NEXUS_UNAVAILABLE</code></td>
+<td>400</td>
+<td>Cannot validate (fail-closed)</td>
+</tr>
+<tr class="even">
+<td><code>UNAUTHORIZED</code></td>
+<td>401</td>
+<td>Invalid or missing API key</td>
+</tr>
+<tr class="odd">
+<td><code>RATE_LIMITED</code></td>
+<td>429</td>
+<td>Too many requests</td>
+</tr>
+<tr class="even">
+<td><code>LLM_TIMEOUT</code></td>
+<td>504</td>
+<td>Upstream didn’t respond in 60s</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="resilience-patterns">Resilience Patterns</h2>
+<table>
+<thead>
+<tr class="header">
+<th>Pattern</th>
+<th>Implementation</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Circuit Breaker</strong></td>
+<td>Opens after 3 Nexus failures, 30s recovery</td>
+</tr>
+<tr class="even">
+<td><strong>Fail-Closed</strong></td>
+<td>Nexus down = block all code responses</td>
+</tr>
+<tr class="odd">
+<td><strong>Rate Limiting</strong></td>
+<td>Token bucket per app_id</td>
+</tr>
+<tr class="even">
+<td><strong>Timeouts</strong></td>
+<td>LLM: 60s, Nexus: 10s per call</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="audit-logging">Audit Logging</h2>
+<p><strong>Format:</strong> Append-only JSONL at
+<code>logs/audit.jsonl</code></p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode json"><code class="sourceCode json"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;timestamp&quot;</span><span class="fu">:</span> <span class="st">&quot;2026-03-27T20:00:00Z&quot;</span><span class="fu">,</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;request_id&quot;</span><span class="fu">:</span> <span class="st">&quot;uuid&quot;</span><span class="fu">,</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;app_id&quot;</span><span class="fu">:</span> <span class="st">&quot;claude-code-dev&quot;</span><span class="fu">,</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;action&quot;</span><span class="fu">:</span> <span class="st">&quot;BLOCKED&quot;</span><span class="fu">,</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;block_code&quot;</span><span class="fu">:</span> <span class="st">&quot;BLOCKED_PII&quot;</span><span class="fu">,</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;model&quot;</span><span class="fu">:</span> <span class="st">&quot;claude-opus-4-5&quot;</span><span class="fu">,</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;prompt_hash&quot;</span><span class="fu">:</span> <span class="st">&quot;sha256:abc...&quot;</span><span class="fu">,</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;latency_ms&quot;</span><span class="fu">:</span> <span class="dv">45</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div>
+<p><strong>Privacy:</strong> Raw prompts never logged — SHA-256 hash
+only.</p>
+<hr />
+<h2 id="test-coverage">Test Coverage</h2>
+<table>
+<thead>
+<tr class="header">
+<th>Category</th>
+<th>Tests</th>
+<th>Coverage</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Input Policy</td>
+<td>20</td>
+<td>PII, credentials, injection</td>
+</tr>
+<tr class="even">
+<td>Output Security</td>
+<td>22</td>
+<td>Code parsing, Nexus validation</td>
+</tr>
+<tr class="odd">
+<td>Auth</td>
+<td>14</td>
+<td>Keys, headers, edge cases</td>
+</tr>
+<tr class="even">
+<td>Audit</td>
+<td>12</td>
+<td>Logging, thread safety</td>
+</tr>
+<tr class="odd">
+<td>Resilience</td>
+<td>12</td>
+<td>Rate limit, timeouts, circuit breaker</td>
+</tr>
+<tr class="even">
+<td>E2E</td>
+<td>12</td>
+<td>Full pipeline scenarios</td>
+</tr>
+<tr class="odd">
+<td>Anthropic Gateway</td>
+<td>42</td>
+<td>Format translation, streaming</td>
+</tr>
+<tr class="even">
+<td><strong>Total</strong></td>
+<td><strong>138</strong></td>
+<td>All passing</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="tech-stack">Tech Stack</h2>
+<table>
+<thead>
+<tr class="header">
+<th>Component</th>
+<th>Technology</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Framework</td>
+<td>Python 3.11 + FastAPI</td>
+</tr>
+<tr class="even">
+<td>PII Detection</td>
+<td>Microsoft Presidio</td>
+</tr>
+<tr class="odd">
+<td>LLM Routing</td>
+<td>LiteLLM</td>
+</tr>
+<tr class="even">
+<td>Package Validation</td>
+<td>Sonatype Nexus REST API</td>
+</tr>
+<tr class="odd">
+<td>HTTP Client</td>
+<td>httpx (async)</td>
+</tr>
+<tr class="even">
+<td>Container</td>
+<td>Multi-stage Docker, non-root</td>
+</tr>
+<tr class="odd">
+<td>Testing</td>
+<td>pytest + httpx AsyncClient</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="deployment">Deployment</h2>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Development</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="bu">source</span> .env <span class="kw">&amp;&amp;</span> <span class="ex">.venv/bin/uvicorn</span> src.proxy.main:app <span class="at">--host</span> 0.0.0.0 <span class="at">--port</span> 8080</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Production (Docker)</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="ex">docker-compose</span> up <span class="at">-d</span></span></code></pre></div>
+<p><strong>Required Environment:</strong></p>
+<pre><code>LITELLM_API_BASE=http://litellm-server:3115/api
+NEXUS_BASE_URL=https://nexus.company.com
+NEXUS_API_KEY=&lt;token&gt;</code></pre>
+<hr />
+<h2 id="key-design-decisions">Key Design Decisions</h2>
+<table>
+<colgroup>
+<col style="width: 47%" />
+<col style="width: 52%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Decision</th>
+<th>Rationale</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Fail-closed on Nexus errors</td>
+<td>Security over availability</td>
+</tr>
+<tr class="even">
+<td>Pass-through auth for Anthropic</td>
+<td>Users already have LiteLLM keys</td>
+</tr>
+<tr class="odd">
+<td>Scan only last user message</td>
+<td>Avoid cascading blocks from conversation history</td>
+</tr>
+<tr class="even">
+<td>Redact old violations (don’t block)</td>
+<td>Allow users to continue after a block</td>
+</tr>
+<tr class="odd">
+<td>No streaming in v1</td>
+<td>Can’t scan output before it reaches client</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="lessons-learned">Lessons Learned</h2>
+<ol type="1">
+<li><p><strong>Presidio false positives</strong> — Tech terms (Django,
+Flask, Anthropic) flagged as person names. Solved with
+allowlist.</p></li>
+<li><p><strong>Claude Code message format</strong> — Bundles multiple
+turns as content blocks in a single message. Must check at block level,
+not message level.</p></li>
+<li><p><strong>pip install flags</strong> — <code>-r</code> from
+<code>pip install -r requirements.txt</code> was parsed as a package.
+Fixed parser to skip flags.</p></li>
+<li><p><strong>Conversation history after blocks</strong> — Old blocked
+content would block all future requests. Solved by redacting old
+violations instead of blocking.</p></li>
+</ol>
+<hr />
+<h2 id="future-enhancements">Future Enhancements</h2>
+<ul class="task-list">
+<li><label><input type="checkbox" />Streaming support with chunked
+output scanning</label></li>
+<li><label><input type="checkbox" />Webhook notifications for blocked
+requests</label></li>
+<li><label><input type="checkbox" />Admin dashboard for audit log
+visualization</label></li>
+<li><label><input type="checkbox" />Configurable policy rules per
+team/app</label></li>
+<li><label><input type="checkbox" />Integration with vulnerability
+databases (OSV, Snyk)</label></li>
+</ul>
+<hr />
+<h2 id="live-demo-screenshots">Live Demo Screenshots</h2>
+<h3 id="setup-connecting-claude-code-to-the-proxy">1. Setup — Connecting
+Claude Code to the Proxy</h3>
+<figure>
+<img src="screenshots/01-setup.png" alt="Setup" />
+<figcaption aria-hidden="true">Setup</figcaption>
+</figure>
+<p><em>Developer configures environment variables to route Claude Code
+through the security proxy.</em></p>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">ANTHROPIC_BASE_URL</span><span class="op">=</span><span class="st">&quot;http://localhost:8080&quot;</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">ANTHROPIC_API_KEY</span><span class="op">=</span><span class="st">&quot;&lt;litellm-key&gt;&quot;</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="ex">claude</span> <span class="at">--model</span> claude-opus-4-5</span></code></pre></div>
+<hr />
+<h3 id="allowed-request-approved-package-requests">2. Allowed Request —
+Approved Package (requests)</h3>
+<figure>
+<img src="screenshots/02-allowed.png" alt="Allowed" />
+<figcaption aria-hidden="true">Allowed</figcaption>
+</figure>
+<p><em>Request passes input policy, LLM generates code using
+<code>requests</code>, package found in Nexus, response
+delivered.</em></p>
+<hr />
+<h3 id="blocked-request-unapproved-package-anthropic">3. Blocked Request
+— Unapproved Package (anthropic)</h3>
+<figure>
+<img src="screenshots/03-blocked.png" alt="Blocked" />
+<figcaption aria-hidden="true">Blocked</figcaption>
+</figure>
+<p><em>Request passes input policy, but LLM generates code with
+<code>import anthropic</code>. Package not found in Nexus →
+<code>BLOCKED_UNVALIDATED_DEP</code>.</em></p>
+<hr />
+<h3 id="blocked-request-pii-detected">4. Blocked Request — PII
+Detected</h3>
+<figure>
+<img src="screenshots/04-pii-blocked.png" alt="PII Blocked" />
+<figcaption aria-hidden="true">PII Blocked</figcaption>
+</figure>
+<p><em>Email address detected in prompt → <code>BLOCKED_PII</code>.
+Request never reaches LLM.</em></p>
+<hr />
+<h2 id="current-issues-next-steps">Current Issues &amp; Next Steps</h2>
+<h3 id="known-issues-being-addressed">Known Issues Being Addressed</h3>
+<table>
+<colgroup>
+<col style="width: 21%" />
+<col style="width: 39%" />
+<col style="width: 39%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Issue</th>
+<th>Description</th>
+<th>Planned Fix</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Conversation context after output block</strong></td>
+<td>When a response is blocked (e.g., unapproved package), the LLM still
+has conversation context. Subsequent prompts like “ok” cause LLM to
+retry the blocked request.</td>
+<td>Investigate conversation history sanitization for output blocks, or
+return a signal to client to clear context.</td>
+</tr>
+<tr class="even">
+<td><strong>Presidio false positives</strong></td>
+<td>Some tech terms still get flagged as person names. Current allowlist
+covers common cases but edge cases remain.</td>
+<td>Expand allowlist dynamically, consider training custom Presidio
+recognizer.</td>
+</tr>
+<tr class="odd">
+<td><strong>No streaming support</strong></td>
+<td>All responses are buffered. This adds latency and prevents real-time
+output.</td>
+<td>Implement chunked output scanning — accumulate code blocks, validate
+incrementally.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="planned-enhancements-next-phase">Planned Enhancements (Next
+Phase)</h3>
+<ol type="1">
+<li><strong>Streaming Support</strong>
+<ul>
+<li>Buffer code blocks during stream</li>
+<li>Validate packages as blocks complete</li>
+<li>Fail-fast on first blocked package</li>
+</ul></li>
+<li><strong>Admin Dashboard</strong>
+<ul>
+<li>Real-time audit log visualization</li>
+<li>Block rate metrics per app/team</li>
+<li>Policy violation trends</li>
+</ul></li>
+<li><strong>Configurable Policies</strong>
+<ul>
+<li>Per-team PII sensitivity levels</li>
+<li>Custom package allowlists</li>
+<li>Prompt injection rule tuning</li>
+</ul></li>
+<li><strong>Vulnerability Integration</strong>
+<ul>
+<li>Cross-reference packages with OSV/Snyk</li>
+<li>Block packages with known CVEs</li>
+<li>Severity-based blocking thresholds</li>
+</ul></li>
+<li><strong>Improved Error UX</strong>
+<ul>
+<li>More descriptive error messages</li>
+<li>Suggest approved alternatives for blocked packages</li>
+<li>Link to internal documentation</li>
+</ul></li>
+</ol>
+<hr />
+<h2 id="demo-commands">Demo Commands</h2>
+<div class="sourceCode" id="cb6"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Should PASS — safe prompt, approved package</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-X</span> POST http://localhost:8080/v1/chat/completions <span class="dt">\</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">-H</span> <span class="st">&quot;Authorization: Bearer dev-local-key-1234&quot;</span> <span class="dt">\</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">-d</span> <span class="st">&#39;{&quot;model&quot;:&quot;gpt-4o&quot;,&quot;messages&quot;:[{&quot;role&quot;:&quot;user&quot;,&quot;content&quot;:&quot;Write Python using requests to fetch a URL&quot;}]}&#39;</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Should BLOCK — PII detected</span></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-X</span> POST http://localhost:8080/v1/chat/completions <span class="dt">\</span></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">-H</span> <span class="st">&quot;Authorization: Bearer dev-local-key-1234&quot;</span> <span class="dt">\</span></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">-d</span> <span class="st">&#39;{&quot;model&quot;:&quot;gpt-4o&quot;,&quot;messages&quot;:[{&quot;role&quot;:&quot;user&quot;,&quot;content&quot;:&quot;Email results to john@secret.com&quot;}]}&#39;</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a><span class="co"># Should BLOCK — package not in Nexus</span></span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-X</span> POST http://localhost:8080/v1/chat/completions <span class="dt">\</span></span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>  <span class="at">-H</span> <span class="st">&quot;Authorization: Bearer dev-local-key-1234&quot;</span> <span class="dt">\</span></span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>  <span class="at">-d</span> <span class="st">&#39;{&quot;model&quot;:&quot;gpt-4o&quot;,&quot;messages&quot;:[{&quot;role&quot;:&quot;user&quot;,&quot;content&quot;:&quot;Write Python using langchain for RAG&quot;}]}&#39;</span></span></code></pre></div>
+<hr />
+<h2 id="contact">Contact</h2>
+<ul>
+<li><strong>Repository:</strong> ~/LLM-proxy</li>
+<li><strong>Tests:</strong>
+<code>.venv/bin/python -m pytest tests/</code></li>
+<li><strong>Logs:</strong> <code>logs/audit.jsonl</code></li>
+</ul>
+</body>
+</html>

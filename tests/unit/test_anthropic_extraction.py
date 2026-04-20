@@ -86,7 +86,7 @@ class TestExtractTextAnthropic:
         assert extract_text_anthropic(body) == "Look at this"
 
     def test_multi_turn(self):
-        """Only the last user message is scanned (previous ones were already checked)."""
+        """Only the last user message is returned (for hashing). Sanitization handles older messages."""
         body = {
             "messages": [
                 {"role": "user", "content": "What is Python?"},
@@ -95,9 +95,10 @@ class TestExtractTextAnthropic:
             ],
         }
         result = extract_text_anthropic(body)
+        # Only last user message (others are handled by check_and_sanitize_anthropic)
+        assert result == "Tell me more."
         assert "What is Python?" not in result
         assert "A programming language." not in result
-        assert result == "Tell me more."
 
     def test_empty_body(self):
         assert extract_text_anthropic({}) == ""

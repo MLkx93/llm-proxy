@@ -36,20 +36,19 @@ async def check(response_text: str) -> OutputPolicyResult:
         if not block.dependencies:
             continue
 
-        lang = block.language
-        for package in block.dependencies:
-            result: ValidationResult = await validate_package(package, lang)
+        for dep in block.dependencies:
+            result: ValidationResult = await validate_package(dep.name, dep.source_type)
             if not result.approved:
                 logger.warning("output_blocked", extra={
-                    "package": package,
-                    "language": lang,
+                    "package": dep.name,
+                    "language": dep.source_type,
                     "block_code": result.block_code,
                 })
                 return OutputPolicyResult(
                     allowed=False,
                     block_code=result.block_code,
                     block_reason=result.reason,
-                    blocked_packages=[package],
+                    blocked_packages=[dep.name],
                 )
 
     return OutputPolicyResult(allowed=True)

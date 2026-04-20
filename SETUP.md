@@ -48,7 +48,8 @@ Anthropic / OpenAI / Google (actual AI provider)
 |------------|-----|-------------|
 | Python 3.12+ | The project runs on Python | `python3 --version` |
 | pip | Installs Python packages | `pip3 --version` |
-| LiteLLM server access | The upstream server that talks to AI providers | You should have an IP + key |
+| OpenRouter API key | Direct access to multiple LLM providers via OpenRouter | Get one at https://openrouter.ai/keys |
+| LiteLLM server access (legacy) | Alternative to OpenRouter for upstream server | You should have an IP + key |
 | (Optional) Docker | For containerised deployment | `docker --version` |
 | (Optional) Nexus instance | For dependency validation | Only if your org has one |
 
@@ -519,3 +520,124 @@ Pass-through. Users use their existing LiteLLM key. No extra keys to manage.
 User sends proxy key → Proxy validates against api_keys.yaml → Proxy uses its own LiteLLM key to forward
 ```
 Two-tier. Users get a separate proxy key. The LiteLLM key stays hidden in `.env`.
+
+---
+
+## OpenRouter Setup (Alternative to LiteLLM)
+
+If you don't have LiteLLM server access or prefer to use OpenRouter directly, follow these steps:
+
+### What is OpenRouter?
+
+OpenRouter is a service that provides unified API access to multiple LLM providers (Anthropic, OpenAI, Meta, Google, etc.) with a single API key. It's cost-effective and doesn't require managing multiple provider accounts.
+
+**Benefits:**
+- Single API key for multiple providers
+- Pay-as-you-go pricing
+- No server setup required
+- Automatic model routing
+
+### Getting an OpenRouter API Key
+
+1. Go to https://openrouter.ai/
+2. Sign up for an account
+3. Navigate to https://openrouter.ai/keys
+4. Generate a new API key
+5. Copy the key (starts with `sk-or-v1-`)
+
+### Configuring OpenRouter in .env
+
+Update your `.env` file:
+
+```bash
+# OpenRouter Configuration (primary for this setup)
+OPENROUTER_API_KEY=sk-or-v1-YOUR_KEY_HERE
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+OPENROUTER_MODEL=anthropic/claude-4-5-haiku
+
+# Comment out or remove LiteLLM settings
+# LITELLM_API_BASE=
+# LITELLM_API_KEY=
+```
+
+### Available OpenRouter Models
+
+OpenRouter supports many models. Here are some popular ones:
+
+| Model | Provider | Description |
+|-------|----------|-------------|
+| `anthropic/claude-4-5-haiku` | Anthropic | Fast, cost-effective (recommended) |
+| `anthropic/claude-3.5-sonnet` | Anthropic | Balanced performance |
+| `anthropic/claude-3-opus` | Anthropic | Highest performance |
+| `openai/gpt-4o` | OpenAI | Multimodal, fast |
+| `openai/gpt-4-turbo` | OpenAI | High performance |
+| `meta-llama/llama-3-8b-instruct` | Meta | Open-source, efficient |
+| `google/gemini-pro` | Google | Multimodal |
+
+For the full list: https://openrouter.ai/models
+
+### Testing OpenRouter Integration
+
+1. **Start the proxy:**
+```bash
+source .venv/bin/activate
+export $(grep -v '^#' .env | xargs)
+uvicorn src.proxy.main:app --host 0.0.0.0 --port 8080 --reload
+```
+
+2. **Run the OpenRouter test script:**
+```bash
+python test_openrouter.py
+```
+
+This will test:
+- Health endpoint
+- OpenAI-compatible endpoint (`/v1/chat/completions`)
+- Anthropic-compatible endpoint (`/v1/messages`)
+- PII blocking
+- Authentication
+
+3. **Manual testing:**
+
+Test OpenAI endpoint:
+```bash
+curl -X POST http://localhost:8080/v1/chat/completions \
+  -H "Authorization: Bearer dev-local-key-1234" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "anthropic/claude-4-5-haiku",
+    "messages": [{"role": "user", "content": "What is 2+2?"}]
+  }'
+```
+
+Test Anthropic endpoint:
+```bash
+curl -X POST http://localhost:8080/v1/messages \
+  -H "Authorization: Bearer sk-or-v1-YOUR_KEY_HERE" \
+  -H "Content-Type: application/json" \
+  -H "anthropic-version: 2023-06-01" \
+  -d '{
+    "model": "anthropic/claude-4-5-haiku",
+    "max_tokens": 100,
+    "messages": [{"role": "user", "content": "What is 3+3?"}]
+  }'
+```
+
+### Switching Between LiteLLM and OpenRouter
+
+The proxy automatically detects which provider to use:
+
+1. If `OPENROUTER_API_KEY` is set → Use OpenRouter
+2. Else if `LITELLM_API_BASE` is set → Use LiteLLM
+3. Else → Error: No provider configured
+
+To switch providers, just update your `.env` and restart the server.
+
+### Cost Management
+
+OpenRouter charges based on actual token usage. Monitor your usage at: https://openrouter.ai/credits
+
+Tips to reduce costs:
+- Use `claude-4-5-haiku` for simple tasks (cheapest Anthropic model)
+- Set `max_tokens` to reasonable limits
+- Use caching when possible

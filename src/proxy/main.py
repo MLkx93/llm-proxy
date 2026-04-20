@@ -2,7 +2,6 @@ import uuid
 import time
 import hashlib
 import asyncio
-import litellm
 import httpx
 
 from fastapi import FastAPI, Request
@@ -122,24 +121,55 @@ async def chat_completions(request: Request, body: ChatCompletionRequest):
 
     # --- LLM call (with timeout) ---
     try:
-        # Build LLM call kwargs — route through LiteLLM proxy if configured
-        llm_kwargs: dict = dict(
-            model=body.model,
-            messages=messages_raw,
-            temperature=body.temperature,
-            max_tokens=body.max_tokens,
-        )
-        if settings.LITELLM_API_BASE:
-            # When routing through a LiteLLM proxy, force OpenAI-compatible
-            # format by prefixing the model name with "openai/"
-            llm_kwargs["model"] = f"openai/{body.model}"
-            llm_kwargs["api_base"] = settings.LITELLM_API_BASE
-            llm_kwargs["api_key"] = settings.LITELLM_API_KEY
-
-        response = await asyncio.wait_for(
-            litellm.acompletion(**llm_kwargs),
-            timeout=LLM_TIMEOUT_S,
-        )
+        if settings.use_openrouter:
+            # Use OpenRouter directly (OpenAI-compatible API)
+            # Transform model name from Claude Code format to OpenRouter format
+            transformed_model = settings.transform_model_name(body.model)
+            logger.info("model_transformed", extra={
+                "request_id": request_id,
+                "original_model": body.model,
+                "transformed_model": transformed_model,
+            })
+            
+            openai_body = {
+                "model": transformed_model,
+                "messages": messages_raw,
+            }
+            if body.temperature is not None:
+                openai_body["temperature"] = body.temperature
+            if body.max_tokens is not None:
+                openai_body["max_tokens"] = body.max_tokens
+            
+            async with httpx.AsyncClient(timeout=httpx.Timeout(LLM_TIMEOUT_S)) as client:
+                response = await client.post(
+                    f"{settings.OPENROUTER_BASE_URL}/chat/completions",
+                    json=openai_body,
+                    headers={
+                        "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
+                        "Content-Type": "application/json",
+                    },
+                )
+                if response.status_code != 200:
+                    raise Exception(f"OpenRouter returned {response.status_code}: {response.text}")
+                response_dict = response.json()
+        elif settings.use_litellm:
+            # Use LiteLLM proxy (legacy mode)
+            import litellm
+            llm_kwargs: dict = dict(
+                model=f"openai/{body.model}",
+                messages=messages_raw,
+                temperature=body.temperature,
+                max_tokens=body.max_tokens,
+                api_base=settings.LITELLM_API_BASE,
+                api_key=settings.LITELLM_API_KEY,
+            )
+            response = await asyncio.wait_for(
+                litellm.acompletion(**llm_kwargs),
+                timeout=LLM_TIMEOUT_S,
+            )
+            response_dict = response.model_dump()
+        else:
+            raise Exception("No LLM provider configured. Set OPENROUTER_API_KEY or LITELLM_API_BASE.")
     except asyncio.TimeoutError:
         logger.error("llm_timeout", extra={"request_id": request_id, "app_id": app_id})
         audit.emit(
@@ -160,7 +190,6 @@ async def chat_completions(request: Request, body: ChatCompletionRequest):
         return _block("LLM_ERROR", f"Upstream LLM call failed: {exc}", request_id, 502)
 
     # --- Output Security Engine (with timeout) ---
-    response_dict = response.model_dump()
     try:
         output_policy = await asyncio.wait_for(
             output_security.check(extract_response_text(response_dict)),
@@ -437,8 +466,10 @@ async def anthropic_messages(request: Request):
     })
 
     # --- Input Policy Engine ---
+    # Check last message for violations (block if found).
+    # Redact violations in older messages (don't block, just sanitize).
+    sanitized_body, policy = input_policy.check_and_sanitize_anthropic(body)
     prompt_text = input_policy.extract_text_anthropic(body)
-    policy = input_policy.check_text(prompt_text)
     p_hash = _hash_text(prompt_text)
 
     if not policy.allowed:
@@ -455,22 +486,41 @@ async def anthropic_messages(request: Request):
         )
         return _anthropic_block(policy.block_code, policy.block_reason, 400)
 
-    # --- Forward to upstream LiteLLM server (OpenAI-compatible) ---
-    if not settings.LITELLM_API_BASE:
+    # --- LLM call based on provider configuration ---
+    # Translate Anthropic request → OpenAI format (using sanitized body)
+    openai_body = _anthropic_to_openai(sanitized_body)
+    
+    # Transform model name from Claude Code format to OpenRouter format
+    transformed_model = settings.transform_model_name(model)
+    logger.info("model_transformed", extra={
+        "request_id": request_id,
+        "original_model": model,
+        "transformed_model": transformed_model,
+    })
+    
+    if settings.use_openrouter:
+        # Use OpenRouter directly
+        # Update the model in openai_body to the transformed model
+        openai_body["model"] = transformed_model
+        upstream_url = f"{settings.OPENROUTER_BASE_URL}/chat/completions"
+        upstream_headers = {
+            "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
+            "Content-Type": "application/json",
+        }
+    elif settings.use_litellm:
+        # Use LiteLLM proxy (legacy mode)
+        upstream_url = f"{settings.LITELLM_API_BASE.rstrip('/')}/v1/chat/completions"
+        upstream_headers = {
+            "content-type": "application/json",
+            "x-api-key": user_api_key,  # pass-through: user's own LiteLLM key
+        }
+    else:
         audit.emit(
             request_id=request_id, app_id=app_id, action="ERROR",
             model=model, block_code="NO_UPSTREAM",
             prompt_hash=p_hash, latency_ms=_elapsed(start),
         )
         return _anthropic_block("NO_UPSTREAM", "No upstream LLM server configured.", 502)
-
-    # Translate Anthropic request → OpenAI format
-    openai_body = _anthropic_to_openai(body)
-    upstream_url = f"{settings.LITELLM_API_BASE.rstrip('/')}/v1/chat/completions"
-    upstream_headers = {
-        "content-type": "application/json",
-        "x-api-key": user_api_key,  # pass-through: user's own LiteLLM key
-    }
 
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(LLM_TIMEOUT_S)) as client:
