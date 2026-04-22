@@ -27,6 +27,14 @@ class Settings:
     # Logging
     AUDIT_LOG_PATH: str = _env("AUDIT_LOG_PATH", "logs/audit.jsonl")
     
+    # Vulnerability Scanning
+    VULN_SCAN_ENABLED: bool = _env("VULN_SCAN_ENABLED", "false").lower() == "true"
+    VULN_MIN_SEVERITY: str = _env("VULN_MIN_SEVERITY", "HIGH")
+    VULN_CACHE_TTL: int = int(_env("VULN_CACHE_TTL", "3600"))
+    VULN_OSV_ENABLED: bool = _env("VULN_OSV_ENABLED", "true").lower() == "true"
+    VULN_CVE_ENABLED: bool = _env("VULN_CVE_ENABLED", "true").lower() == "true"
+    VULN_SNYK_API_KEY: str = _env("VULN_SNYK_API_KEY", "")
+    
     @property
     def use_openrouter(self) -> bool:
         """Check if OpenRouter is configured and should be used."""
