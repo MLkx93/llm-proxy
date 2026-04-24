@@ -641,3 +641,248 @@ Tips to reduce costs:
 - Use `claude-4-5-haiku` for simple tasks (cheapest Anthropic model)
 - Set `max_tokens` to reasonable limits
 - Use caching when possible
+
+---
+
+## Security Phases Overview
+
+The LLM-proxy implements a multi-phase security architecture to protect against malicious or vulnerable code in LLM responses.
+
+### Phase 1: Enhanced Vulnerability Scanning ✅
+
+Scans packages mentioned in LLM responses against vulnerability databases (OSV, CVE).
+
+**Configuration:**
+```bash
+VULN_SCAN_ENABLED=true
+VULN_MIN_SEVERITY=HIGH
+VULN_CACHE_TTL=3600
+VULN_OSV_ENABLED=true
+VULN_CVE_ENABLED=true
+```
+
+**How it works:**
+- Extracts package dependencies from LLM-generated code
+- Queries OSV (Google's Open Source Vulnerabilities) and CVE databases
+- Assigns CVSS scores and severity levels
+- Blocks packages exceeding the minimum severity threshold
+
+**Files:**
+- `src/output_security/vulnerability_scanner.py`
+- `tests/unit/test_vulnerability_scanner.py`
+
+---
+
+### Phase 2: Advanced Version Validation ✅
+
+Checks specific package versions against known vulnerable ranges.
+
+**Configuration:**
+```bash
+VERSION_VALIDATION_ENABLED=true
+VERSION_ADVISORY_DB_PATH=security_advisories.db
+VERSION_AUTO_UPDATE_DB=true
+VERSION_UPDATE_INTERVAL_HOURS=24
+```
+
+**How it works:**
+- Parses version constraints (npm `^`, `~`, PyPI `>=`, etc.)
+- Maintains a local SQLite database of security advisories
+- Checks if specific versions fall within vulnerable ranges
+- Provides upgrade recommendations with fixed versions
+
+**Key features:**
+- Supports npm, PyPI, Maven, RubyGems, Go version formats
+- Includes sample advisories for common vulnerabilities
+- Configurable blocking based on severity
+
+**Files:**
+- `src/output_security/version_parser.py`
+- `src/output_security/security_advisory.py`
+- `src/output_security/version_validator.py`
+- `tests/unit/test_version_validation.py`
+
+**Sample advisories included:**
+- CVE-2021-44228 (Log4j - CRITICAL, CVSS 10.0)
+- CVE-2021-23337 (Django SQL injection - HIGH, CVSS 8.1)
+- CVE-2021-3749 (Requests CRLF injection - HIGH, CVSS 7.5)
+
+---
+
+### Phase 3: Dependency Tree Analysis ✅
+
+Analyzes transitive dependencies to catch vulnerabilities in indirect dependencies.
+
+**Configuration:**
+```bash
+DEPENDENCY_SCAN_ENABLED=true
+DEPENDENCY_MAX_DEPTH=3
+DEPENDENCY_RISK_THRESHOLD=10.0
+DEPENDENCY_BLOCK_ON_CRITICAL=true
+```
+
+**How it works:**
+- Resolves full dependency trees (direct + transitive)
+- Enriches tree with vulnerability information
+- Calculates risk scores weighted by depth (transitive = higher risk)
+- Detects version conflicts and generates upgrade recommendations
+
+**Risk scoring:**
+- CRITICAL vulnerability: 10 points
+- HIGH vulnerability: 7 points
+- MEDIUM vulnerability: 4 points
+- LOW vulnerability: 1 point
+- Score multiplied by depth factor (transitive dependencies are riskier)
+
+**Security grades:**
+- A: No vulnerabilities
+- B: LOW vulnerabilities only
+- C: MEDIUM vulnerabilities
+- D: HIGH vulnerabilities
+- F: CRITICAL vulnerabilities
+
+**Files:**
+- `src/output_security/dependency_tree.py`
+- `src/output_security/dependency_resolver.py`
+- `tests/unit/test_dependency_tree.py`
+
+**Supported ecosystems:**
+- Python (pip, PyPI)
+- JavaScript (npm)
+- Java (Maven)
+
+---
+
+### Phase 4: Code Sandbox Validation ✅
+
+Executes code in isolated Docker containers for behavioral analysis.
+
+**Configuration:**
+```bash
+SANDBOX_ENABLED=true
+SANDBOX_IMAGE=python:3.11-slim
+SANDBOX_TIMEOUT_SECONDS=30
+SANDBOX_MEMORY_LIMIT=512m
+SANDBOX_NETWORK_ENABLED=false
+SANDBOX_RISK_THRESHOLD=6.0
+```
+
+**How it works:**
+- Pre-execution pattern analysis with configurable rules
+- Docker-based isolated code execution
+- Resource limits (memory, CPU, network, read-only filesystem)
+- Behavioral pattern detection during execution
+- Comprehensive risk scoring and blocking
+
+**Risk Detection Categories:**
+- **Network Access** (7 severity): socket, HTTP requests, SSH connections
+- **File System** (5-8 severity): file writes, sensitive file access
+- **Process Execution** (7-9 severity): shell execution, eval/exec, PTY spawn
+- **Privilege Escalation** (7-9 severity): chmod, chown, sudo
+- **Encoding** (5-6 severity): base64, hex encoding
+
+**Security Grades:**
+- A: Score 0-2 (safe)
+- B: Score 2-4 (low risk)
+- C: Score 4-6 (medium risk)
+- D: Score 6-8 (high risk)
+- F: Score 8-10 (critical)
+
+**Files:**
+- `src/output_security/sandbox.py`
+- `src/output_security/detection_rules.py`
+- `src/output_security/risk_scorer.py`
+- `tests/unit/test_sandbox.py`
+
+**Usage:**
+```python
+from src.output_security.sandbox import analyze_code_sandbox
+
+result = await analyze_code_sandbox(code, risk_threshold=6.0)
+print(f"Risk score: {result.risk_score}")
+print(f"Grade: {result.security_grade}")
+```
+
+---
+
+## Testing Security Features
+
+```bash
+# Run all security-related tests
+python -m pytest tests/unit/test_vulnerability_scanner.py tests/unit/test_version_validation.py tests/unit/test_dependency_tree.py tests/unit/test_sandbox.py tests/unit/test_security_orchestrator.py -v
+
+# Run with coverage
+python -m pytest tests/unit/test_security.py --cov=src.output_security --cov-report=html
+
+# Test specific phase
+python -m pytest tests/unit/test_version_validation.py -v
+
+# Test security orchestrator
+python -m pytest tests/unit/test_security_orchestrator.py -v
+```
+
+## Security Orchestration
+
+The security engine (`src/output_security/engine.py`) orchestrates all 4 phases into a unified workflow:
+
+### Execution Order:
+1. **Nexus Validation** - Repository approval check
+2. **Phase 1: Vulnerability Scan** - OSV/CVE database query
+3. **Phase 2: Version Validation** - Specific version range check
+4. **Phase 3: Dependency Tree** - Transitive dependency analysis
+5. **Phase 4: Sandbox** - Behavioral code analysis
+
+### Key Features:
+- **Early Termination**: Stops on first blocking result (configurable)
+- **Fail-Safe Mode**: Blocks on any phase failure (configurable)
+- **Graceful Degradation**: Continues with reduced security if phases fail
+- **Comprehensive Results**: Returns detailed results from all phases
+
+### Usage:
+```python
+from src.output_security.engine import SecurityOrchestrator, check_full
+
+# Quick check (legacy interface)
+result = await check(response_text)
+
+# Full analysis with all phase details
+result = await check_full(response_text)
+
+# Direct orchestrator usage
+orchestrator = SecurityOrchestrator(
+    enable_vuln_scan=True,
+    enable_version_validation=True,
+    enable_dependency_scan=True,
+    enable_sandbox=True,
+    early_termination=True,
+    fail_safe=True
+)
+
+# Check a package
+result = await orchestrator.check_package(
+    package_name="requests",
+    version="2.25.0",
+    ecosystem="pypi",
+    source_type="pypi"
+)
+
+# Check code
+result = await orchestrator.check_code(code, language="python")
+
+print(f"Allowed: {result.allowed}")
+print(f"Grade: {result.security_grade}")
+print(f"Risk Level: {result.risk_level}")
+for phase in result.phase_results:
+    print(f"  {phase.phase.value}: {'PASS' if phase.passed else 'FAIL'}")
+```
+
+## Quick Security Check
+
+```python
+from src.output_security.dependency_resolver import analyze_package_health
+
+# Quick health check for a package
+result = analyze_package_health("requests", "2.25.0", "python")
+print(f"Security grade: {result['security_grade']}")
+print(f"Vulnerabilities: {result['vulnerabilities_found']}")
+```

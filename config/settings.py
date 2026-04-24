@@ -23,6 +23,7 @@ class Settings:
     # Nexus
     NEXUS_BASE_URL: str = _env("NEXUS_BASE_URL")
     NEXUS_API_KEY: str = _env("NEXUS_API_KEY")
+    NEXUS_FAIL_OPEN: bool = _env("NEXUS_FAIL_OPEN", "false").lower() == "true"
 
     # Logging
     AUDIT_LOG_PATH: str = _env("AUDIT_LOG_PATH", "logs/audit.jsonl")
@@ -34,6 +35,27 @@ class Settings:
     VULN_OSV_ENABLED: bool = _env("VULN_OSV_ENABLED", "true").lower() == "true"
     VULN_CVE_ENABLED: bool = _env("VULN_CVE_ENABLED", "true").lower() == "true"
     VULN_SNYK_API_KEY: str = _env("VULN_SNYK_API_KEY", "")
+    
+    # Version Validation (Phase 2)
+    VERSION_VALIDATION_ENABLED: bool = _env("VERSION_VALIDATION_ENABLED", "false").lower() == "true"
+    VERSION_ADVISORY_DB_PATH: str = _env("VERSION_ADVISORY_DB_PATH", "security_advisories.db")
+    VERSION_AUTO_UPDATE_DB: bool = _env("VERSION_AUTO_UPDATE_DB", "true").lower() == "true"
+    VERSION_UPDATE_INTERVAL_HOURS: int = int(_env("VERSION_UPDATE_INTERVAL_HOURS", "24"))
+    
+    # Dependency Tree Analysis (Phase 3)
+    DEPENDENCY_SCAN_ENABLED: bool = _env("DEPENDENCY_SCAN_ENABLED", "false").lower() == "true"
+    DEPENDENCY_MAX_DEPTH: int = int(_env("DEPENDENCY_MAX_DEPTH", "3"))
+    DEPENDENCY_RISK_THRESHOLD: float = float(_env("DEPENDENCY_RISK_THRESHOLD", "10.0"))
+    DEPENDENCY_BLOCK_ON_CRITICAL: bool = _env("DEPENDENCY_BLOCK_ON_CRITICAL", "true").lower() == "true"
+    
+    # Code Sandbox Validation (Phase 4)
+    SANDBOX_ENABLED: bool = _env("SANDBOX_ENABLED", "false").lower() == "true"
+    SANDBOX_IMAGE: str = _env("SANDBOX_IMAGE", "python:3.11-slim")
+    SANDBOX_TIMEOUT_SECONDS: int = int(_env("SANDBOX_TIMEOUT_SECONDS", "30"))
+    SANDBOX_MEMORY_LIMIT: str = _env("SANDBOX_MEMORY_LIMIT", "512m")
+    SANDBOX_CPU_LIMIT: float = float(_env("SANDBOX_CPU_LIMIT", "1.0"))
+    SANDBOX_NETWORK_ENABLED: bool = _env("SANDBOX_NETWORK_ENABLED", "false").lower() == "true"
+    SANDBOX_RISK_THRESHOLD: float = float(_env("SANDBOX_RISK_THRESHOLD", "6.0"))
     
     @property
     def use_openrouter(self) -> bool:

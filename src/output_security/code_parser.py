@@ -11,6 +11,7 @@ Supports:
 """
 import re
 from dataclasses import dataclass
+from typing import Optional
 
 
 # Matches fenced markdown code blocks: ```lang\n...\n```
@@ -81,13 +82,19 @@ _GO_STDLIB_PREFIXES = {
 class Dependency:
     name: str
     source_type: str  # "python", "javascript", etc. — determines which repo to check
+    version: Optional[str] = None  # version string if detected in code
 
 
 @dataclass(frozen=True)
 class CodeBlock:
     language: str
-    content: str
+    content: str  # Alias: 'code' for compatibility with engine.py
     dependencies: list[Dependency]
+    
+    @property
+    def code(self) -> str:
+        """Alias for content - for compatibility with engine.py."""
+        return self.content
 
 
 def _is_stdlib(lang: str, package: str) -> bool:
