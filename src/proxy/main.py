@@ -9,12 +9,14 @@ from fastapi.responses import JSONResponse
 
 from .models import ChatCompletionRequest, ErrorResponse, ErrorDetail
 from .models import AnthropicErrorResponse, AnthropicErrorDetail
+from .models import AnthropicMessageRequest
 from .logging import get_logger
 from .auth import validate, validate_api_key
 from .rate_limiter import is_allowed
 from src.input_policy import engine as input_policy
 from src.output_security import engine as output_security
 from src.output_security.engine import extract_response_text, extract_response_text_anthropic
+import litellm
 from config.settings import settings
 from src.audit import logger as audit
 
@@ -424,7 +426,7 @@ def _openai_to_anthropic(openai_resp: dict, model: str) -> dict:
 # ---------------------------------------------------------------------------
 
 @app.post("/v1/messages")
-async def anthropic_messages(request: Request):
+async def anthropic_messages(request: Request, body: AnthropicMessageRequest):
     request_id = request.state.request_id
     start = time.monotonic()
 
@@ -452,15 +454,14 @@ async def anthropic_messages(request: Request):
         return _anthropic_block("RATE_LIMITED", "Too many requests. Please slow down.", 429)
 
     # --- Parse body ---
-    body = await request.json()
-    model = body.get("model", "")
-    is_streaming = body.get("stream", False)
+    model = body.model
+    is_streaming = body.stream
 
     logger.info("request_received", extra={
         "request_id": request_id,
         "app_id": app_id,
         "model": model,
-        "message_count": len(body.get("messages", [])),
+        "message_count": len(body.messages),
         "endpoint": "/v1/messages",
         "stream": is_streaming,
     })
@@ -468,8 +469,8 @@ async def anthropic_messages(request: Request):
     # --- Input Policy Engine ---
     # Check last message for violations (block if found).
     # Redact violations in older messages (don't block, just sanitize).
-    sanitized_body, policy = input_policy.check_and_sanitize_anthropic(body)
-    prompt_text = input_policy.extract_text_anthropic(body)
+    sanitized_body, policy = input_policy.check_and_sanitize_anthropic(body.model_dump())
+    prompt_text = input_policy.extract_text_anthropic(body.model_dump())
     p_hash = _hash_text(prompt_text)
 
     if not policy.allowed:

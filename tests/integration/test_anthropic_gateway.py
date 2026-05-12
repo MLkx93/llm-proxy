@@ -11,7 +11,7 @@ import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 from httpx import AsyncClient, ASGITransport, Response as HttpxResponse
 
-from src.proxy.main import app
+from src.proxy.main import app, settings
 from src.proxy.rate_limiter import reset as reset_bucket
 from src.output_security.nexus import ValidationResult
 
@@ -330,9 +330,9 @@ async def test_rate_limited(client):
 # ---------------------------------------------------------------------------
 @pytest.mark.asyncio
 async def test_no_upstream_returns_502(client):
-    with patch("src.proxy.main.settings") as mock_settings:
-        mock_settings.LITELLM_API_BASE = ""
-        mock_settings.LITELLM_API_KEY = ""
+    with patch.object(settings, 'LITELLM_API_BASE', new=""), \
+         patch.object(settings, 'LITELLM_API_KEY', new=""), \
+         patch.object(settings, 'OPENROUTER_API_KEY', new=""):
         response = await client.post("/v1/messages", json=SAFE_BODY, headers=AUTH)
     assert response.status_code == 502
     assert "NO_UPSTREAM" in response.json()["error"]["message"]

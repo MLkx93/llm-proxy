@@ -1,320 +1,320 @@
-"""
-Version Constraint Parser Module.
+""" Version Parser Module.
 
-Parses and normalizes version constraints from various package managers:
-- npm: ^1.0.0, ~1.2.3, >=1.0.0 <2.0.0
-- PyPI: >=1.0.0, ==2.0.0, !=3.0.0
-- Maven: [1.0.0,2.0.0), 1.0.0
-- Go: v1.0.0, github.com/pkg@v1.2.3
-
-Supports semantic versioning and comparison.
+Parses and compares version strings and version constraints for security vulnerability checking.
 """
 import re
 from dataclasses import dataclass
-from typing import List, Tuple, Optional
 from enum import Enum
+from typing import List, Optional, Union
 
 
-class ConstraintType(Enum):
-    """Types of version constraints."""
-    CARET = "^"           # npm: Compatible with version
-    TILDE = "~"           # npm: Patch-level changes
-    GREATER_THAN = ">"    
-    GREATER_THAN_OR_EQUAL = ">="
-    LESS_THAN = "<"
-    LESS_THAN_OR_EQUAL = "<="
-    EXACT = "=="          # Exact version match
-    NOT_EQUAL = "!="
-    RANGE_OR = "||"       # Logical OR of ranges
-    RANGE_AND = " "      # Implicit AND (space between constraints)
-    ANY = "*"            # Any version
-    TILDE_RANGE = "~"    # Tilde range (PyPI style)
+class VersionComparison(Enum):
+    """Enum for version comparison results."""
+    LESS_THAN = -1
+    EQUAL = 0
+    GREATER_THAN = 1
 
 
-@dataclass(frozen=True)
+@dataclass
 class Version:
-    """Normalized version representation."""
+    """Represents a parsed version number with major, minor, patch, and pre-release components."""
     major: int
     minor: int
     patch: int
-    pre_release: str = ""
-    build_metadata: str = ""
-    
+    pre_release: Optional[str] = None
+    build_metadata: Optional[str] = None
+
+    def __post_init__(self):
+        if self.major < 0 or self.minor < 0 or self.patch < 0:
+            raise ValueError("Version components cannot be negative")
+
     def __str__(self) -> str:
-        version = f"{self.major}.{self.minor}.{self.patch}"
+        result = f"{self.major}.{self.minor}.{self.patch}"
         if self.pre_release:
-            version += f"-{self.pre_release}"
+            result += f"-{self.pre_release}"
         if self.build_metadata:
-            version += f"+{self.build_metadata}"
-        return version
-    
-    def __lt__(self, other: 'Version') -> bool:
-        return self._compare(other) < 0
-    
-    def __le__(self, other: 'Version') -> bool:
-        return self._compare(other) <= 0
-    
-    def __gt__(self, other: 'Version') -> bool:
-        return self._compare(other) > 0
-    
-    def __ge__(self, other: 'Version') -> bool:
-        return self._compare(other) >= 0
-    
+            result += f"+{self.build_metadata}"
+        return result
+
+    def __repr__(self) -> str:
+        return f"Version(major={self.major}, minor={self.minor}, patch={self.patch}, pre_release={self.pre_release!r}, build_metadata={self.build_metadata!r})"
+
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Version):
-            return False
-        return self._compare(other) == 0
-    
-    def __ne__(self, other: object) -> bool:
-        return not self.__eq__(other)
-    
-    def _compare(self, other: 'Version') -> int:
-        """Compare versions. Returns -1, 0, or 1."""
-        self_tuple = (self.major, self.minor, self.patch)
-        other_tuple = (other.major, other.minor, other.patch)
-        
-        if self_tuple < other_tuple:
-            return -1
-        elif self_tuple > other_tuple:
-            return 1
-        else:
-            # Handle pre-release (pre-release < release)
-            if self.pre_release and not other.pre_release:
-                return -1
-            elif not self.pre_release and other.pre_release:
-                return 1
-            elif self.pre_release < other.pre_release:
-                return -1
-            elif self.pre_release > other.pre_release:
-                return 1
-        return 0
+            return NotImplemented
+        return (self.major == other.major and
+                self.minor == other.minor and
+                self.patch == other.patch and
+                self.pre_release == other.pre_release)
+
+    def __lt__(self, other: "Version") -> bool:
+        if not isinstance(other, Version):
+            return NotImplemented
+        return self.compare(other) == VersionComparison.LESS_THAN
+
+    def __le__(self, other: "Version") -> bool:
+        if not isinstance(other, Version):
+            return NotImplemented
+        comparison = self.compare(other)
+        return comparison in (VersionComparison.LESS_THAN, VersionComparison.EQUAL)
+
+    def __gt__(self, other: "Version") -> bool:
+        if not isinstance(other, Version):
+            return NotImplemented
+        return self.compare(other) == VersionComparison.GREATER_THAN
+
+    def __ge__(self, other: "Version") -> bool:
+        if not isinstance(other, Version):
+            return NotImplemented
+        comparison = self.compare(other)
+        return comparison in (VersionComparison.GREATER_THAN, VersionComparison.EQUAL)
+
+    def compare(self, other: "Version") -> VersionComparison:
+        """Compare this version with another version.
+
+        Args:
+            other: Version to compare against
+
+        Returns:
+            VersionComparison enum value
+        """
+        # Compare major versions
+        if self.major < other.major:
+            return VersionComparison.LESS_THAN
+        if self.major > other.major:
+            return VersionComparison.GREATER_THAN
+
+        # Compare minor versions
+        if self.minor < other.minor:
+            return VersionComparison.LESS_THAN
+        if self.minor > other.minor:
+            return VersionComparison.GREATER_THAN
+
+        # Compare patch versions
+        if self.patch < other.patch:
+            return VersionComparison.LESS_THAN
+        if self.patch > other.patch:
+            return VersionComparison.GREATER_THAN
+
+        # Compare pre-release versions (pre-release < release)
+        if self.pre_release is not None and other.pre_release is None:
+            return VersionComparison.LESS_THAN
+        if self.pre_release is None and other.pre_release is not None:
+            return VersionComparison.GREATER_THAN
+        if self.pre_release is not None and other.pre_release is not None:
+            if self.pre_release < other.pre_release:
+                return VersionComparison.LESS_THAN
+            if self.pre_release > other.pre_release:
+                return VersionComparison.GREATER_THAN
+
+        # Versions are equal
+        return VersionComparison.EQUAL
 
 
-@dataclass(frozen=True)
+@dataclass
 class VersionConstraint:
-    """Represents a single version constraint."""
-    constraint_type: ConstraintType
-    version: Optional[Version]
-    
+    """Represents a version constraint for matching against versions."""
+    operator: str
+    version: Version
+
+    def __post_init__(self):
+        if self.operator not in [">=", "<=", ">", "<", "==", "!="]:
+            raise ValueError(f"Invalid operator: {self.operator}")
+
     def matches(self, version: Version) -> bool:
-        """Check if a version matches this constraint."""
-        if self.version is None:
-            return self.constraint_type == ConstraintType.ANY
-        
-        if self.constraint_type == ConstraintType.ANY:
-            return True
-        elif self.constraint_type == ConstraintType.EXACT:
-            return version == self.version
-        elif self.constraint_type == ConstraintType.GREATER_THAN:
-            return version > self.version
-        elif self.constraint_type == ConstraintType.GREATER_THAN_OR_EQUAL:
+        """Check if a version matches this constraint.
+
+        Args:
+            version: Version to check
+
+        Returns:
+            True if version matches the constraint, False otherwise
+        """
+        if self.operator == ">=":
             return version >= self.version
-        elif self.constraint_type == ConstraintType.LESS_THAN:
-            return version < self.version
-        elif self.constraint_type == ConstraintType.LESS_THAN_OR_EQUAL:
+        elif self.operator == "<=":
             return version <= self.version
-        elif self.constraint_type == ConstraintType.NOT_EQUAL:
+        elif self.operator == ">":
+            return version > self.version
+        elif self.operator == "<":
+            return version < self.version
+        elif self.operator == "==":
+            return version == self.version
+        elif self.operator == "!=":
             return version != self.version
-        elif self.constraint_type == ConstraintType.CARET:
-            # ^x.y.z := >=x.y.z <(x+1).0.0
-            return (version >= self.version and 
-                    Version(self.version.major + 1, 0, 0) > version)
-        elif self.constraint_type == ConstraintType.TILDE:
-            # ~x.y.z := >=x.y.z <x.(y+1).0
-            return (version >= self.version and 
-                    Version(self.version.major, self.version.minor + 1, 0) > version)
         return False
+
+    def __str__(self) -> str:
+        return f"{self.operator}{self.version}"
+
+    def __repr__(self) -> str:
+        return f"VersionConstraint(operator={self.operator!r}, version={self.version!r})"
+
+
+# Version string parsing patterns
+VERSION_PATTERN = re.compile(
+    r'^v?'  # Optional 'v' prefix
+    r'(?P<major>\d+)'
+    r'(?:\.(?P<minor>\d+))?'
+    r'(?:\.(?P<patch>\d+))?'
+    r'(?:-(?P<prerelease>[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?'
+    r'(?:\+(?P<buildmetadata>[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?'
+    r'$'
+)
 
 
 def _parse_version_string(version_str: str) -> Version:
-    """Parse a version string into a Version object."""
+    """
+    Parse a version string into a Version object.
+
+    Args:
+        version_str: Version string to parse (e.g., "1.2.3", "1.0.0-alpha", "2.1.0+build.123")
+
+    Returns:
+        Version object with parsed components
+
+    Raises:
+        ValueError: If the version string cannot be parsed
+    """
     if not version_str:
-        return Version(0, 0, 0)
-    
-    # Remove leading 'v' for Go-style versions
-    version_str = re.sub(r'^v', '', version_str)
-    
-    # Split version and pre-release/build metadata
-    version_str = version_str.strip()
-    
-    # Extract build metadata
-    build_metadata = ""
-    if '+' in version_str:
-        version_str, build_metadata = version_str.split('+', 1)
-    
-    # Extract pre-release
-    pre_release = ""
-    if '-' in version_str:
-        version_str, pre_release = version_str.split('-', 1)
-    
-    # Parse version numbers
-    match = re.match(r'(\d+)\.(\d+)\.(\d+)', version_str)
-    if match:
-        major, minor, patch = match.groups()
-        return Version(
-            major=int(major),
-            minor=int(minor),
-            patch=int(patch),
-            pre_release=pre_release,
-            build_metadata=build_metadata
-        )
-    
-    # Handle single or double number versions
-    match = re.match(r'(\d+)\.(\d+)', version_str)
-    if match:
-        major, minor = match.groups()
-        return Version(
-            major=int(major),
-            minor=int(minor),
-            patch=0,
-            pre_release=pre_release,
-            build_metadata=build_metadata
-        )
-    
-    match = re.match(r'(\d+)', version_str)
-    if match:
-        major = match.group(1)
-        return Version(
-            major=int(major),
-            minor=0,
-            patch=0,
-            pre_release=pre_release,
-            build_metadata=build_metadata
-        )
-    
-    return Version(0, 0, 0)
+        raise ValueError("Version string cannot be empty")
 
+    # Remove leading 'v' if present
+    version_str = version_str.lstrip('v')
 
-def _parse_constraint_operator(constraint_str: str) -> Tuple[ConstraintType, str]:
-    """Parse the operator from a constraint string."""
-    constraint_str = constraint_str.strip()
-    
-    if constraint_str.startswith('>='):
-        return (ConstraintType.GREATER_THAN_OR_EQUAL, constraint_str[2:].strip())
-    elif constraint_str.startswith('<='):
-        return (ConstraintType.LESS_THAN_OR_EQUAL, constraint_str[2:].strip())
-    elif constraint_str.startswith('=='):
-        return (ConstraintType.EXACT, constraint_str[2:].strip())
-    elif constraint_str.startswith('!='):
-        return (ConstraintType.NOT_EQUAL, constraint_str[2:].strip())
-    elif constraint_str.startswith('>'):
-        return (ConstraintType.GREATER_THAN, constraint_str[1:].strip())
-    elif constraint_str.startswith('<'):
-        return (ConstraintType.LESS_THAN, constraint_str[1:].strip())
-    elif constraint_str.startswith('^'):
-        return (ConstraintType.CARET, constraint_str[1:].strip())
-    elif constraint_str.startswith('~'):
-        return (ConstraintType.TILDE, constraint_str[1:].strip())
-    elif constraint_str == '*':
-        return (ConstraintType.ANY, "")
-    elif constraint_str.startswith('[') or constraint_str.startswith('('):
-        # Maven-style range, return as-is for special handling
-        return (ConstraintType.RANGE_AND, constraint_str)
-    else:
-        # Default to greater than or equal for bare versions
-        return (ConstraintType.GREATER_THAN_OR_EQUAL, constraint_str)
+    # Try to match the version pattern
+    match = VERSION_PATTERN.match(version_str)
+    if not match:
+        raise ValueError(f"Invalid version string: {version_str}")
+
+    major = int(match.group("major"))
+    minor = int(match.group("minor") or 0)
+    patch = int(match.group("patch") or 0)
+    pre_release = match.group("prerelease")
+    build_metadata = match.group("buildmetadata")
+
+    return Version(
+        major=major,
+        minor=minor,
+        patch=patch,
+        pre_release=pre_release,
+        build_metadata=build_metadata
+    )
 
 
 def parse_constraint(constraint_str: str) -> List[VersionConstraint]:
     """
-    Parse a version constraint string into individual constraints.
-    
-    Supports:
-    - Simple versions: "1.0.0"
-    - Operators: ">=1.0.0", "<2.0.0", "^1.0.0", "~1.0.0"
-    - Multiple constraints: ">=1.0.0 <2.0.0"
-    - OR constraints: "1.0.0 || >=2.0.0"
-    
+    Parse a version constraint string into a list of VersionConstraint objects.
+
     Args:
-        constraint_str: Version constraint string
-        
+        constraint_str: Constraint string (e.g., ">=1.0.0 <2.0.0", ">1.2.3")
+
     Returns:
         List of VersionConstraint objects
+
+    Raises:
+        ValueError: If the constraint string cannot be parsed
     """
     if not constraint_str:
-        return [VersionConstraint(ConstraintType.ANY, None)]
-    
+        raise ValueError("Constraint string cannot be empty")
+
+    # Remove brackets and quotes if present
+    constraint_str = constraint_str.strip().strip('[]').strip('"').strip("'")
+
+    # Split by spaces to get individual constraints
+    constraint_parts = constraint_str.split()
+
     constraints = []
-    constraint_str = constraint_str.strip()
-    
-    # Handle OR constraints
-    parts = re.split(r'\s*\|\|\s*\|\|\s*', constraint_str)
-    
-    for part in parts:
-        part = part.strip()
+    for part in constraint_parts:
         if not part:
             continue
-            
-        # Check for compound constraint (AND)
-        sub_parts = part.split()
-        for sub_part in sub_parts:
-            sub_part = sub_part.strip()
-            if not sub_part:
-                continue
-            
-            constraint_type, version_str = _parse_constraint_operator(sub_part)
-            
-            if constraint_type == ConstraintType.ANY:
-                constraints.append(VersionConstraint(ConstraintType.ANY, None))
-            elif constraint_type == ConstraintType.RANGE_AND:
-                # Handle Maven-style ranges like [1.0.0,2.0.0)
-                # This is complex and would need special handling
-                continue
-            else:
-                version = _parse_version_string(version_str)
-                constraints.append(VersionConstraint(constraint_type, version))
-    
-    if not constraints:
-        constraints.append(VersionConstraint(ConstraintType.ANY, None))
-    
+
+        # Handle compound operators (>=, <=)
+        if part.startswith(">="):
+            operator = ">="
+            version_str = part[2:]
+        elif part.startswith("<="):
+            operator = "<="
+            version_str = part[2:]
+        elif part.startswith(">"):
+            operator = ">"
+            version_str = part[1:]
+        elif part.startswith("<"):
+            operator = "<"
+            version_str = part[1:]
+        elif part.startswith("=="):
+            operator = "=="
+            version_str = part[2:]
+        elif part.startswith("!="):
+            operator = "!="
+            version_str = part[2:]
+        else:
+            # Default to equality if no operator specified
+            operator = "=="
+            version_str = part
+
+        version = _parse_version_string(version_str)
+        constraints.append(VersionConstraint(operator=operator, version=version))
+
     return constraints
 
 
-def matches_constraint(version: str, constraint_str: str) -> bool:
+def is_version_affected(version_str: str, constraint_str: str) -> bool:
     """
-    Check if a version matches a constraint string.
-    
+    Check if a version string is affected by a version constraint.
+
     Args:
-        version: Version string to check
-        constraint_str: Constraint string to match against
-        
+        version_str: Version string to check
+        constraint_str: Version constraint string
+
     Returns:
-        True if version matches the constraint, False otherwise
+        True if version is affected, False otherwise
     """
-    version_obj = _parse_version_string(version)
+    version = _parse_version_string(version_str)
     constraints = parse_constraint(constraint_str)
-    
+
     # Version must match ALL constraints (AND relationship)
     for constraint in constraints:
-        if not constraint.matches(version_obj):
+        if not constraint.matches(version):
             return False
-    
+
     return True
 
 
-def normalize_version(version_str: str) -> str:
+def compare_versions(version1_str: str, version2_str: str) -> VersionComparison:
     """
-    Normalize a version string to a standard format.
-    
+    Compare two version strings.
+
     Args:
-        version_str: Version string to normalize
-        
+        version1_str: First version string
+        version2_str: Second version string
+
     Returns:
-        Normalized version string
+        VersionComparison enum value
     """
-    version = _parse_version_string(version_str)
-    return str(version)
+    version1 = _parse_version_string(version1_str)
+    version2 = _parse_version_string(version2_str)
+    return version1.compare(version2)
 
 
-def get_version_tuple(version_str: str) -> Tuple[int, int, int]:
+def get_version_info(version_str: str) -> dict:
     """
-    Get version as a comparable tuple.
-    
+    Get detailed information about a version string.
+
     Args:
-        version_str: Version string
-        
+        version_str: Version string to analyze
+
     Returns:
-        Tuple of (major, minor, patch)
+        Dictionary with version information
     """
     version = _parse_version_string(version_str)
-    return (version.major, version.minor, version.patch)
+    return {
+        "original": version_str,
+        "major": version.major,
+        "minor": version.minor,
+        "patch": version.patch,
+        "pre_release": version.pre_release,
+        "build_metadata": version.build_metadata,
+        "is_prerelease": version.pre_release is not None,
+        "string_representation": str(version),
+    }

@@ -551,12 +551,12 @@ def analyze_package_health(
     for vuln in vulnerabilities:
         severity_counts[vuln["severity"]] = severity_counts.get(vuln["severity"], 0) + 1
     
-    return {
-        "package": package,
-        "version": version,
-        "ecosystem": ecosystem,
-        "vulnerabilities_found": len(vulnerabilities),
-        "severity_counts": severity_counts,
-        "is_secure": len(vulnerabilities) == 0,
-        "vulnerabilities": vulnerabilities
-    }
+    return DependencyAnalysisResult(
+        package=package,
+        version=version,
+        ecosystem=ecosystem,
+        vulnerabilities_found=len(vulnerabilities),
+        severity_counts=severity_counts,
+        is_secure=len(vulnerabilities) == 0,
+        vulnerabilities=vulnerabilities
+    )

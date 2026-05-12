@@ -268,7 +268,7 @@ class SecurityOrchestrator:
             version_start = datetime.now()
             try:
                 db = await self._get_advisory_db()
-                version_result = await validate_package_version(package_name, version, ecosystem, db)
+                version_result = await validate_package_version(package_name, version, ecosystem)
                 version_time = (datetime.now() - version_start).total_seconds() * 1000
                 
                 phase_results.append(PhaseResult(

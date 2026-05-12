@@ -1,10 +1,10 @@
-from pydantic import BaseModel
-from typing import Optional, List, Literal
+from pydantic import BaseModel, Field
+from typing import Optional, List, Literal, Union, Any
 
 
 class Message(BaseModel):
     role: Literal["system", "user", "assistant"]
-    content: str
+    content: Union[str, List[Any]]
 
 
 class ChatCompletionRequest(BaseModel):
@@ -13,6 +13,16 @@ class ChatCompletionRequest(BaseModel):
     temperature: Optional[float] = None
     max_tokens: Optional[int] = None
     # stream is intentionally excluded — streaming is blocked in v1
+
+
+class AnthropicMessageRequest(BaseModel):
+    """Pydantic model for Anthropic /v1/messages endpoint."""
+    model: str
+    messages: List[Message]
+    max_tokens: int = Field(..., description="Maximum number of tokens to generate")
+    temperature: Optional[float] = Field(0.7, ge=0.0, le=2.0)
+    stream: Optional[bool] = False
+    system: Optional[str] = None
 
 
 class ErrorDetail(BaseModel):

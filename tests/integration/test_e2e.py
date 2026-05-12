@@ -56,6 +56,11 @@ def reset_rate_limits():
 
 @pytest.fixture
 def client():
+    from src.proxy.main import app, settings
+    # Monkeypatch the settings to force LiteLLM branch
+    settings.OPENROUTER_API_KEY = ""
+    settings.LITELLM_API_BASE = "http://localhost:8000"
+    settings.LITELLM_API_KEY = "test-key"
     return AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
 
 

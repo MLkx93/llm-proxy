@@ -1,5 +1,4 @@
-"""
-Nexus Firewall validation client.
+""" Nexus Firewall validation client.
 
 Checks whether a package is approved in the enterprise Nexus repository.
 Implements a simple circuit breaker: after FAILURE_THRESHOLD consecutive
@@ -7,9 +6,9 @@ failures, the circuit opens and all requests are fail-closed (blocked)
 until RECOVERY_TIMEOUT seconds have elapsed.
 
 Fail-closed policy (per Phase 0 decision):
-  - Nexus unreachable → block the response, return NEXUS_UNAVAILABLE
-  - Package not found → block the response, return BLOCKED_UNVALIDATED_DEP
-  - Package found and clean → allow
+- Nexus unreachable → block the response, return NEXUS_UNAVAILABLE
+- Package not found → block the response, return BLOCKED_UNVALIDATED_DEP
+- Package found and clean → allow
 """
 import time
 import httpx
@@ -22,16 +21,14 @@ from src.proxy.logging import get_logger
 logger = get_logger("nexus")
 
 # Circuit breaker thresholds
-FAILURE_THRESHOLD = 3       # consecutive failures before opening circuit
-RECOVERY_TIMEOUT = 30.0     # seconds before attempting recovery
-REQUEST_TIMEOUT = 5.0       # seconds per Nexus HTTP call
-
+FAILURE_THRESHOLD = 3  # consecutive failures before opening circuit
+RECOVERY_TIMEOUT = 30.0  # seconds before attempting recovery
+REQUEST_TIMEOUT = 5.0  # seconds per Nexus HTTP call
 
 class CircuitState(Enum):
-    CLOSED = "closed"       # normal operation
-    OPEN = "open"           # failing — all requests rejected immediately
-    HALF_OPEN = "half_open" # one probe allowed to test recovery
-
+    CLOSED = "closed"  # normal operation
+    OPEN = "open"  # failing — all requests rejected immediately
+    HALF_OPEN = "half_open"  # one probe allowed to test recovery
 
 @dataclass
 class _CircuitBreaker:
@@ -62,16 +59,13 @@ class _CircuitBreaker:
         # HALF_OPEN: allow the probe
         return True
 
-
 _circuit = _CircuitBreaker()
-
 
 @dataclass(frozen=True)
 class ValidationResult:
     approved: bool
-    reason: str = ""          # human-readable
-    block_code: str = ""      # machine-readable error code
-
+    reason: str = ""  # human-readable
+    block_code: str = ""  # machine-readable error code
 
 def _nexus_url(package: str, language: str) -> str:
     """Build the Nexus REST API search URL for a given package."""
@@ -89,10 +83,8 @@ def _nexus_url(package: str, language: str) -> str:
     base = settings.NEXUS_BASE_URL.rstrip("/")
     return f"{base}/service/rest/v1/search?repository={repo}&name={package}"
 
-
 async def validate_package(package: str, language: str) -> ValidationResult:
-    """
-    Check a single package against Nexus Firewall.
+    """ Check a single package against Nexus Firewall.
     Returns ValidationResult(approved=True) if safe, or a blocking result.
     """
     if not settings.NEXUS_BASE_URL:
@@ -120,31 +112,29 @@ async def validate_package(package: str, language: str) -> ValidationResult:
     try:
         async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
             resp = await client.get(url, headers=headers)
+            if resp.status_code == 200:
+                data = resp.json()
+                items = data.get("items", [])
+                if not items:
+                    _circuit.record_success()  # Nexus responded — it's up
+                    logger.warning("package_not_in_nexus", extra={"package": package, "language": language})
+                    return ValidationResult(
+                        approved=False,
+                        reason=f"Package '{package}' was not found in the approved Nexus repository.",
+                        block_code="BLOCKED_UNVALIDATED_DEP",
+                    )
+                _circuit.record_success()
+                logger.info("package_approved", extra={"package": package, "language": language})
+                return ValidationResult(approved=True)
 
-        if resp.status_code == 200:
-            data = resp.json()
-            items = data.get("items", [])
-            if not items:
-                _circuit.record_success()  # Nexus responded — it's up
-                logger.warning("package_not_in_nexus", extra={"package": package, "language": language})
-                return ValidationResult(
-                    approved=False,
-                    reason=f"Package '{package}' was not found in the approved Nexus repository.",
-                    block_code="BLOCKED_UNVALIDATED_DEP",
-                )
-            _circuit.record_success()
-            logger.info("package_approved", extra={"package": package, "language": language})
-            return ValidationResult(approved=True)
-
-        # Non-200 from Nexus — treat as unavailable
-        _circuit.record_failure()
-        logger.error("nexus_bad_status", extra={"status": resp.status_code, "package": package})
-        return ValidationResult(
-            approved=False,
-            reason="Dependency validation service returned an unexpected response.",
-            block_code="NEXUS_UNAVAILABLE",
-        )
-
+            # Non-200 from Nexus — treat as unavailable
+            _circuit.record_failure()
+            logger.error("nexus_bad_status", extra={"status": resp.status_code, "package": package})
+            return ValidationResult(
+                approved=False,
+                reason="Dependency validation service returned an unexpected response.",
+                block_code="NEXUS_UNAVAILABLE",
+            )
     except (httpx.TimeoutException, httpx.ConnectError, httpx.RequestError) as exc:
         _circuit.record_failure()
         logger.error("nexus_unreachable", extra={"error": str(exc), "package": package})

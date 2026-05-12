@@ -40,17 +40,20 @@ async def test_health(client):
 
 @pytest.mark.asyncio
 async def test_chat_completions_pass_through(client):
-    with patch("src.proxy.main.litellm.acompletion", new_callable=AsyncMock) as mock_llm:
-        mock_llm.return_value = FAKE_RESPONSE
-        response = await client.post(
-            "/v1/chat/completions",
-            json={"model": "gpt-4o", "messages": [{"role": "user", "content": "Say hello"}]},
-            headers=AUTH,
-        )
-    assert response.status_code == 200
-    data = response.json()
-    assert data["choices"][0]["message"]["content"] == "Hello, world!"
-    assert "X-Request-Id" in response.headers
+    with patch("src.proxy.main.settings.OPENROUTER_API_KEY", ""), \
+         patch("src.proxy.main.settings.LITELLM_API_BASE", "http://fake"), \
+         patch("src.proxy.main.settings.LITELLM_API_KEY", "fake"):
+        with patch("src.proxy.main.litellm.acompletion", new_callable=AsyncMock) as mock_llm:
+            mock_llm.return_value = FAKE_RESPONSE
+            response = await client.post(
+                "/v1/chat/completions",
+                json={"model": "gpt-4o", "messages": [{"role": "user", "content": "Say hello"}]},
+                headers=AUTH,
+            )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["choices"][0]["message"]["content"] == "Hello, world!"
+        assert "X-Request-Id" in response.headers
 
 
 @pytest.mark.asyncio

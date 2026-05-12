@@ -21,7 +21,12 @@ class StructuredFormatter(logging.Formatter):
                 "thread", "threadName", "processName", "process", "message",
                 "taskName",
             ):
-                log[key] = value
+                # Try to serialize the value, if it fails, convert to string
+                try:
+                    json.dumps(value)
+                    log[key] = value
+                except (TypeError, OverflowError):
+                    log[key] = str(value)
         return json.dumps(log)
 
 
