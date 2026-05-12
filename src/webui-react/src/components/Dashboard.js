@@ -94,6 +94,25 @@ function Dashboard() {
     }
   };
 
+  const getFeatureDescription = (featureName) => {
+    const descriptions = {
+      'PII Detection': 'Automatically detects and blocks personally identifiable information like social security numbers, credit cards, email addresses, and phone numbers from being sent to LLMs.',
+      'Credential Detection': 'Prevents API keys, passwords, tokens, and other secrets from leaking in prompts to LLM providers.',
+      'Prompt Injection': 'Blocks malicious attempts to manipulate LLM behavior through crafted prompts that ignore safety guidelines.',
+      'Smart Redaction': 'Context-aware removal of sensitive information while preserving utility for legitimate LLM processing.',
+      'Nexus Validation': 'Verifies that any packages or dependencies mentioned in LLM-generated code exist in your approved internal repository.',
+      'Vulnerability Scan': 'Checks packages against public vulnerability databases (OSV, NVD/CVE) to identify known security issues.',
+      'Version Validation': 'Ensures that package versions mentioned in generated code are not affected by known vulnerabilities.',
+      'Dependency Tree': 'Analyzes the full dependency graph of generated code to catch transitive vulnerabilities.',
+      'Sandbox Execution': 'Runs generated code in isolated Docker containers with resource limits to detect malicious behavior.',
+      'Risk Scoring': 'Combines multiple risk factors into a weighted score to help prioritize security reviews.',
+      'Rate Limiting': 'Prevents abuse and ensures fair usage by limiting the number of requests per application or user.',
+      'Circuit Breaker': 'Automatically temporarily stops requests to failing services to prevent cascading failures.'
+    };
+
+    return descriptions[featureName] || 'Provides advanced security protection for LLM interactions.';
+  };
+
   if (loading) {
     return (
       <div className="dashboard loading">
@@ -135,8 +154,108 @@ function Dashboard() {
   return (
     <div className="dashboard">
       <div className="dashboard-header">
-        <h1>📊 System Dashboard</h1>
-        <p>Real-time monitoring and statistics</p>
+        <h1>📊 LLM Security Proxy Dashboard</h1>
+        <p>Monitor and understand your LLM security infrastructure</p>
+      </div>
+
+      {/* Project Overview Section */}
+      <div className="card overview-full">
+        <h2>🎯 What is the LLM Security Proxy?</h2>
+        <p className="overview-description">
+          The LLM Security Proxy is a centralized security gateway designed to protect organizations
+          using Large Language Models (LLMs) by providing comprehensive security controls over
+          both input prompts and LLM-generated outputs.
+        </p>
+
+        <div className="overview-grid">
+          <div className="overview-card">
+            <div className="overview-icon">🔒</div>
+            <div className="overview-content">
+              <h3>Input Protection</h3>
+              <p>Scans all incoming prompts for sensitive data (PII, credentials),
+                 prompt injection attempts, and malicious content before reaching LLMs.</p>
+            </div>
+          </div>
+          <div className="overview-card">
+            <div className="overview-icon">🛡️</div>
+            <div className="overview-content">
+              <h3>Output Validation</h3>
+              <p>Analyzes LLM-generated responses for security risks including
+                 unsafe code, vulnerable dependencies, and data leakage.</p>
+            </div>
+          </div>
+          <div className="overview-card">
+            <div className="overview-icon">🔄</div>
+            <div className="overview-content">
+              <h3>Provider Agnostic</h3>
+              <p>Works with any LLM provider (OpenAI, Anthropic, etc.) through
+                 a unified interface, giving you flexibility without compromising security.</p>
+            </div>
+          </div>
+          <div className="overview-card">
+            <div className="overview-icon">📊</div>
+            <div className="overview-content">
+              <h3>Enterprise Ready</h3>
+              <p>Provides audit logging, monitoring, and policy enforcement
+                 suitable for enterprise deployment and compliance requirements.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* How It Works Section */}
+      <div className="card how-it-works-full">
+        <h2>⚙️ How the Security Pipeline Works</h2>
+        <p className="how-it-works-description">
+          Every LLM request follows a 5-stage security pipeline designed to catch
+          threats at multiple layers while minimizing false positives:
+        </p>
+        <div className="pipeline-container-full">
+          <div className="pipeline-step-full">
+            <div className="step-circle">1</div>
+            <div className="step-label">Authentication & Rate Limiting</div>
+            <div className="step-description">
+              Verify API keys, enforce rate limits, and identify the application
+              making the request for proper logging and policy application.
+            </div>
+          </div>
+          <div className="pipeline-arrow">→</div>
+          <div className="pipeline-step-full">
+            <div className="step-circle">2</div>
+            <div className="step-label">Input Policy Engine</div>
+            <div className="step-description">
+              Scan prompts for PII (SSN, credit cards, emails), API keys/secrets,
+              and prompt injection attacks using NER and pattern matching.
+            </div>
+          </div>
+          <div className="pipeline-arrow">→</div>
+          <div className="pipeline-step-full">
+            <div className="step-circle">3</div>
+            <div className="step-label">LLM Provider</div>
+            <div className="step-description">
+              Forward cleaned request to selected LLM provider (OpenAI, Anthropic,
+              etc.) for actual response generation.
+            </div>
+          </div>
+          <div className="pipeline-arrow">→</div>
+          <div className="pipeline-step-full">
+            <div className="step-circle">4</div>
+            <div className="step-label">Output Security Engine</div>
+            <div className="step-description">
+              Validate generated code for safety: check dependencies against
+              approved repositories, scan for vulnerabilities, and execute in sandbox.
+            </div>
+          </div>
+          <div className="pipeline-arrow">→</div>
+          <div className="pipeline-step-full">
+            <div className="step-circle">5</div>
+            <div className="step-label">Secure Response Delivery</div>
+            <div className="step-description">
+              Return validated, safe response to your application or block with
+              detailed explanation if security risks are detected.
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="dashboard-grid">
@@ -200,15 +319,25 @@ function Dashboard() {
         {/* Security Features */}
         {features && features.length > 0 && (
           <div className="card security-features">
-            <h2>🛡️ Security Features</h2>
-            <div className="features-list">
+            <h2>🛡️ Security Features Explained</h2>
+            <p className="features-intro">
+              Here are the security protections actively working to keep your LLM usage safe:
+            </p>
+            <div className="features-list-enhanced">
               {features.map((feature, index) => (
-                <div key={index} className="feature-item">
-                  <span className={`feature-badge ${feature.badge === 'Active' ? 'active' : 'configurable'}`}>
-                    {feature.badge === 'Active' ? '✅' : '⚙️'}
-                  </span>
-                  <span className="feature-name">{feature.name}</span>
-                  <span className="feature-description">{feature.description}</span>
+                <div key={index} className="feature-item-enhanced">
+                  <div className="feature-header">
+                    <span className={`feature-badge ${feature.badge === 'Active' ? 'active' : 'configurable'}`}>
+                      {feature.badge === 'Active' ? 'Active' : 'Configurable'}
+                    </span>
+                    <h3 className="feature-title">{feature.name}</h3>
+                  </div>
+                  <p className="feature-description-enhanced">
+                    {getFeatureDescription(feature.name)}
+                  </p>
+                  <div className="feature-category-badge category-{feature.category.toLowerCase()}">
+                    {feature.category}
+                  </div>
                 </div>
               ))}
             </div>
