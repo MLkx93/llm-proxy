@@ -156,18 +156,21 @@ class SecurityAdvisoryDatabase:
             logger.error("advisory_insert_error", extra={"error": str(e)})
             return False
     
-    def get_advisories_for_package(self, package_name: str, 
+    def get_advisories_for_package(self, package_name: str,
                                    package_manager: str) -> List[Advisory]:
         """Get all advisories for a specific package."""
         try:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute('''
-                    SELECT * FROM advisories 
+                    SELECT id, package_name, package_manager, affected_versions,
+                           fixed_versions, severity, cvss_score, summary,
+                           published_date, references_url, source
+                    FROM advisories
                     WHERE package_name = ? AND package_manager = ?
                     ORDER BY cvss_score DESC, published_date DESC
                 ''', (package_name, package_manager))
-                
+
                 rows = cursor.fetchall()
                 return [Advisory(**dict(row)) for row in rows]
         except sqlite3.Error as e:
@@ -195,11 +198,14 @@ class SecurityAdvisoryDatabase:
             with self._get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute('''
-                    SELECT * FROM advisories 
+                    SELECT id, package_name, package_manager, affected_versions,
+                           fixed_versions, severity, cvss_score, summary,
+                           published_date, references_url, source
+                    FROM advisories
                     WHERE severity = ?
                     ORDER BY cvss_score DESC
                 ''', (severity.upper(),))
-                
+
                 rows = cursor.fetchall()
                 return [Advisory(**dict(row)) for row in rows]
         except sqlite3.Error as e:

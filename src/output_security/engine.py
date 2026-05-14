@@ -2,12 +2,13 @@
 Output Security Engine.
 
 Inspects LLM responses before they are returned to the client.
-Orchestrates all 4 security phases for comprehensive protection:
+Orchestrates all 5 security phases for comprehensive protection:
 
 Phase 1: Vulnerability Scanning (OSV/CVE databases)
 Phase 2: Version Validation (specific version checks)
 Phase 3: Dependency Tree Analysis (transitive dependencies)
 Phase 4: Code Sandbox Validation (behavioral analysis)
+Phase 5: Guardrails (Safety checks)
 
 Fail-closed: any unvalidated or unsafe dependency blocks the response.
 """
@@ -41,6 +42,12 @@ from .risk_scorer import (
     RiskAssessment,
     RiskLevel,
 )
+from .guardrails import (
+    check_guardrails,
+    GuardrailsAssessment,
+    GuardrailCategory,
+    RiskLevel as GuardrailRiskLevel,
+)
 from src.proxy.logging import get_logger
 from config.settings import settings
 
@@ -54,6 +61,7 @@ class SecurityPhase(Enum):
     VERSION = "VERSION"
     DEPENDENCY = "DEPENDENCY"
     SANDBOX = "SANDBOX"
+    GUARDRAILS = "GUARDRAILS"
 
 
 @dataclass
@@ -218,7 +226,7 @@ class SecurityOrchestrator:
                 
                 should_block, reason = should_block_package(
                     vuln_report,
-                    min_severity=settings.VULN_MIN_SEVERITY
+                    min_severity=settings.VULN_BLOCK_MIN_SEVERITY
                 )
                 
                 phase_results.append(PhaseResult(
@@ -273,27 +281,36 @@ class SecurityOrchestrator:
                 
                 phase_results.append(PhaseResult(
                     phase=SecurityPhase.VERSION,
-                    passed=not version_result["is_vulnerable"],
+                    passed=not version_result.is_vulnerable,
                     execution_time_ms=version_time,
                     details={
-                        "is_vulnerable": version_result["is_vulnerable"],
-                        "advisories_found": len(version_result.get("advisories", []))
+                        "is_vulnerable": version_result.is_vulnerable,
+                        "vulnerability_count": version_result.vulnerability_count
                     }
                 ))
-                
-                if version_result["is_vulnerable"]:
-                    advisories = version_result.get("advisories", [])
-                    reason = f"Vulnerable version. {len(advisories)} advisory(ies) found."
-                    return SecurityCheckResult(
-                        allowed=False,
-                        block_code="BLOCKED_VULNERABLE_VERSION",
-                        block_reason=reason,
-                        blocked_packages=[package_name],
-                        phase_results=phase_results,
-                        total_execution_time_ms=(datetime.now() - start_time).total_seconds() * 1000,
-                        security_grade="F",
-                        risk_level="HIGH"
-                    )
+
+                if version_result.is_vulnerable:
+                    # Check if the vulnerability meets the blocking threshold
+                    highest_severity = version_result.highest_severity
+                    # Define severity order for comparison
+                    severity_order = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1, "NONE": 0}
+                    block_threshold = settings.VERSION_BLOCK_MIN_SEVERITY
+                    threshold_value = severity_order.get(block_threshold, 3)  # Default to HIGH
+                    highest_value = severity_order.get(highest_severity, 0)
+
+                    if highest_value >= threshold_value:
+                        reason = f"Vulnerable version (severity: {highest_severity}). {version_result.vulnerability_count} advisory(ies) found."
+                        return SecurityCheckResult(
+                            allowed=False,
+                            block_code="BLOCKED_VULNERABLE_VERSION",
+                            block_reason=reason,
+                            blocked_packages=[package_name],
+                            phase_results=phase_results,
+                            total_execution_time_ms=(datetime.now() - start_time).total_seconds() * 1000,
+                            security_grade="F",
+                            risk_level=highest_severity
+                        )
+                    # If below threshold, allow but log/vulnerabilities still tracked in phase_results
             except Exception as e:
                 logger.error("version_validation_error", extra={"error": str(e)})
                 if self.fail_safe:
@@ -327,7 +344,8 @@ class SecurityOrchestrator:
                     }
                 ))
                 
-                if dep_result.security_grade in ["D", "F"]:
+                # Only block on Critical (F) grade, not on High (D) grade
+                if dep_result.security_grade == "F":
                     return SecurityCheckResult(
                         allowed=False,
                         block_code="BLOCKED_DEPENDENCY_VULNERABILITY",
@@ -336,8 +354,10 @@ class SecurityOrchestrator:
                         phase_results=phase_results,
                         total_execution_time_ms=(datetime.now() - start_time).total_seconds() * 1000,
                         security_grade=dep_result.security_grade,
-                        risk_level="HIGH" if dep_result.security_grade == "D" else "CRITICAL"
+                        risk_level="CRITICAL"
                     )
+                # For D grade, we still track it in phase_results but don't block
+                # (unless we want to add a separate threshold for warning levels)
             except Exception as e:
                 logger.error("dependency_scan_error", extra={"error": str(e)})
                 if self.fail_safe:
@@ -381,7 +401,7 @@ class SecurityOrchestrator:
             sandbox_result: SandboxResult = await analyze_code_sandbox(
                 code,
                 language=language,
-                risk_threshold=settings.SANDBOX_RISK_THRESHOLD,
+                risk_threshold=settings.SANDBOX_BLOCK_RISK_THRESHOLD,  # For blocking decisions
                 block_on_high_risk=True
             )
             sandbox_time = (datetime.now() - sandbox_start).total_seconds() * 1000
@@ -419,13 +439,94 @@ class SecurityOrchestrator:
                     security_grade=sandbox_result.security_grade,
                     risk_level="HIGH" if sandbox_result.risk_score < 8 else "CRITICAL"
                 )
-            
+
+            # Phase 5: Guardrails (for code content)
+            if settings.GUARDRAILS_ENABLED and code:
+                guardrails_start = datetime.now()
+                try:
+                    guardrails_result: GuardrailsAssessment = await check_guardrails(
+                        code,
+                        toxicity_threshold=settings.GUARDRAILS_TOXICITY_THRESHOLD,
+                        hallucination_threshold=settings.GUARDRAILS_HALLUCINATION_THRESHOLD,
+                        prompt_leakage_threshold=settings.GUARDRAILS_PROMPT_LEAKAGE_THRESHOLD,
+                        content_safety_threshold=settings.GUARDRAILS_CONTENT_SAFETY_THRESHOLD,
+                        block_on_critical=settings.GUARDRAILS_BLOCK_ON_CRITICAL,
+                        early_termination=settings.GUARDRAILS_EARLY_TERMINATION
+                    )
+                    guardrails_time = (datetime.now() - guardrails_start).total_seconds() * 1000
+
+                    phase_results.append(PhaseResult(
+                        phase=SecurityPhase.GUARDRAILS,
+                        passed=guardrails_result.overall_passed,
+                        execution_time_ms=guardrails_time,
+                        details={
+                            "overall_passed": guardrails_result.overall_passed,
+                            "overall_risk": guardrails_result.overall_risk.value,
+                            "score": guardrails_result.score,
+                            "category_results": [r.to_dict() for r in guardrails_result.category_results],
+                            "execution_time_ms": guardrails_result.execution_time_ms,
+                            "summary": guardrails_result.summary
+                        }
+                    ))
+
+                    if not guardrails_result.overall_passed:
+                        # Determine block reason based on the highest risk category
+                        block_reasons = []
+                        for result in guardrails_result.category_results:
+                            if not result.passed:
+                                block_reasons.append(f"{result.category.value}: {result.score:.1f}")
+
+                        block_reason = "; ".join(block_reasons) if block_reasons else "Guardrails violation detected"
+
+                        return SecurityCheckResult(
+                            allowed=False,
+                            block_code="BLOCKED_GUARDRAILS",
+                            block_reason=block_reason,
+                            phase_results=phase_results,
+                            total_execution_time_ms=(datetime.now() - start_time).total_seconds() * 1000,
+                            security_grade="F" if guardrails_result.overall_risk == RiskLevel.CRITICAL else "D",
+                            risk_level=guardrails_result.overall_risk.value
+                        )
+                except Exception as e:
+                    logger.error("guardrails_error", extra={"error": str(e)})
+                    if self.fail_safe:
+                        return SecurityCheckResult(
+                            allowed=False,
+                            block_code="GUARDRAILS_ERROR",
+                            block_reason=f"Guardrails check failed: {str(e)}",
+                            phase_results=phase_results,
+                            total_execution_time_ms=(datetime.now() - start_time).total_seconds() * 1000,
+                            security_grade="F",
+                            risk_level="HIGH"
+                        )
+
             return SecurityCheckResult(
                 allowed=True,
                 phase_results=phase_results,
                 total_execution_time_ms=total_time,
                 security_grade=sandbox_result.security_grade,
                 risk_level=risk_assessment.risk_level.value
+            )
+
+        except Exception as e:
+            logger.error("sandbox_error", extra={"error": str(e)})
+            if self.fail_safe:
+                return SecurityCheckResult(
+                    allowed=False,
+                    block_code="SANDBOX_ERROR",
+                    block_reason=f"Sandbox execution failed: {str(e)}",
+                    phase_results=phase_results,
+                    total_execution_time_ms=(datetime.now() - start_time).total_seconds() * 1000,
+                    security_grade="F",
+                    risk_level="HIGH"
+                )
+            return SecurityCheckResult(
+                allowed=True,
+                phase_results=phase_results,
+                total_execution_time_ms=(datetime.now() - start_time).total_seconds() * 1000,
+                security_grade="B",
+                risk_level="LOW",
+                metadata={"sandbox_error": str(e)}
             )
         
         except Exception as e:

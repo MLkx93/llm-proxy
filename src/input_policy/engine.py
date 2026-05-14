@@ -135,7 +135,9 @@ def check_and_sanitize_anthropic(body: dict) -> tuple[dict, PolicyResult]:
     Check Anthropic request body and sanitize if needed.
 
     Strategy:
-    1. Check ONLY the last user message - if violations found, BLOCK
+    1. Check ONLY the last user message - if violations found:
+        - For credentials/injections: BLOCK
+        - For PII: REDACT (if PII_ACTION is "redact") or BLOCK (if "block")
     2. If last message is clean, check older messages
     3. If older messages have violations, REDACT them (don't block)
     4. Return (sanitized_body, policy_result)
@@ -144,18 +146,41 @@ def check_and_sanitize_anthropic(body: dict) -> tuple[dict, PolicyResult]:
     blocked content from reaching the LLM.
     """
     import copy
+    from config.settings import settings
 
     messages = body.get("messages", [])
     if not messages:
         return body, PolicyResult(allowed=True)
 
-    # Step 1: Check the LAST user message - if bad, block
+    # Step 1: Check the LAST user message
     last_user_text = _get_last_user_text(body)
     last_user_text_cleaned = _TOOL_TAG_RE.sub("", last_user_text).strip()
 
     policy = check_text(last_user_text_cleaned)
     if not policy.allowed:
-        return body, policy  # Block - last message has violations
+        # Handle different violation types
+        if policy.block_code == "BLOCKED_PII":
+            # For PII, check if we should redact instead of block
+            if settings.PII_ACTION == "redact":
+                # Redact the PII in the last user message and allow the request
+                sanitized_body = copy.deepcopy(body)
+                # Redact only the last user message content
+                if isinstance(sanitized_body.get("messages", [])[-1].get("content"), str):
+                    # Simple string content
+                    sanitized_body["messages"][-1]["content"] = _redact_text(last_user_text)
+                elif isinstance(sanitized_body.get("messages", [])[-1].get("content"), list):
+                    # Complex content (blocks)
+                    content = sanitized_body["messages"][-1]["content"]
+                    for block in content:
+                        if isinstance(block, dict) and block.get("type") == "text":
+                            block["text"] = _redact_text(block.get("text", ""))
+                return sanitized_body, PolicyResult(allowed=True, findings=policy.findings)
+            else:
+                # Block for PII (original behavior)
+                return body, policy
+        else:
+            # Block for credentials and injections (higher risk - always block)
+            return body, policy
 
     # Step 2: Last message is clean. Redact violations in ALL older content.
     # This includes:

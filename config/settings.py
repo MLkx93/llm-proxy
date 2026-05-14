@@ -30,7 +30,8 @@ class Settings:
     
     # Vulnerability Scanning
     VULN_SCAN_ENABLED: bool = _env("VULN_SCAN_ENABLED", "false").lower() == "true"
-    VULN_MIN_SEVERITY: str = _env("VULN_MIN_SEVERITY", "HIGH")
+    VULN_MIN_SEVERITY: str = _env("VULN_MIN_SEVERITY", "HIGH")  # For scanning/loading
+    VULN_BLOCK_MIN_SEVERITY: str = _env("VULN_BLOCK_MIN_SEVERITY", "CRITICAL")  # For blocking decisions
     VULN_CACHE_TTL: int = int(_env("VULN_CACHE_TTL", "3600"))
     VULN_OSV_ENABLED: bool = _env("VULN_OSV_ENABLED", "true").lower() == "true"
     VULN_CVE_ENABLED: bool = _env("VULN_CVE_ENABLED", "true").lower() == "true"
@@ -41,12 +42,14 @@ class Settings:
     VERSION_ADVISORY_DB_PATH: str = _env("VERSION_ADVISORY_DB_PATH", "security_advisories.db")
     VERSION_AUTO_UPDATE_DB: bool = _env("VERSION_AUTO_UPDATE_DB", "true").lower() == "true"
     VERSION_UPDATE_INTERVAL_HOURS: int = int(_env("VERSION_UPDATE_INTERVAL_HOURS", "24"))
+    VERSION_BLOCK_MIN_SEVERITY: str = _env("VERSION_BLOCK_MIN_SEVERITY", "HIGH")  # For blocking decisions
     
     # Dependency Tree Analysis (Phase 3)
     DEPENDENCY_SCAN_ENABLED: bool = _env("DEPENDENCY_SCAN_ENABLED", "false").lower() == "true"
     DEPENDENCY_MAX_DEPTH: int = int(_env("DEPENDENCY_MAX_DEPTH", "3"))
     DEPENDENCY_RISK_THRESHOLD: float = float(_env("DEPENDENCY_RISK_THRESHOLD", "10.0"))
     DEPENDENCY_BLOCK_ON_CRITICAL: bool = _env("DEPENDENCY_BLOCK_ON_CRITICAL", "true").lower() == "true"
+    DEPENDENCY_BLOCK_MIN_GRADE: str = _env("DEPENDENCY_BLOCK_MIN_GRADE", "F")  # For blocking decisions
     
     # Code Sandbox Validation (Phase 4)
     SANDBOX_ENABLED: bool = _env("SANDBOX_ENABLED", "false").lower() == "true"
@@ -55,7 +58,20 @@ class Settings:
     SANDBOX_MEMORY_LIMIT: str = _env("SANDBOX_MEMORY_LIMIT", "512m")
     SANDBOX_CPU_LIMIT: float = float(_env("SANDBOX_CPU_LIMIT", "1.0"))
     SANDBOX_NETWORK_ENABLED: bool = _env("SANDBOX_NETWORK_ENABLED", "false").lower() == "true"
-    SANDBOX_RISK_THRESHOLD: float = float(_env("SANDBOX_RISK_THRESHOLD", "6.0"))
+    SANDBOX_RISK_THRESHOLD: float = float(_env("SANDBOX_RISK_THRESHOLD", "6.0"))  # For scanning/loading
+    SANDBOX_BLOCK_RISK_THRESHOLD: float = float(_env("SANDBOX_BLOCK_RISK_THRESHOLD", "8.0"))  # For blocking decisions
+
+    # PII Handling
+    PII_ACTION: str = _env("PII_ACTION", "redact")  # Options: "block", "redact"
+
+    # Guardrails (Phase 5)
+    GUARDRAILS_ENABLED: bool = _env("GUARDRAILS_ENABLED", "false").lower() == "true"
+    GUARDRAILS_TOXICITY_THRESHOLD: float = float(_env("GUARDRAILS_TOXICITY_THRESHOLD", "5.0"))
+    GUARDRAILS_HALLUCINATION_THRESHOLD: float = float(_env("GUARDRAILS_HALLUCINATION_THRESHOLD", "3.0"))
+    GUARDRAILS_PROMPT_LEAKAGE_THRESHOLD: float = float(_env("GUARDRAILS_PROMPT_LEAKAGE_THRESHOLD", "4.0"))
+    GUARDRAILS_CONTENT_SAFETY_THRESHOLD: float = float(_env("GUARDRAILS_CONTENT_SAFETY_THRESHOLD", "4.0"))
+    GUARDRAILS_BLOCK_ON_CRITICAL: bool = _env("GUARDRAILS_BLOCK_ON_CRITICAL", "true").lower() == "true"
+    GUARDRAILS_EARLY_TERMINATION: bool = _env("GUARDRAILS_EARLY_TERMINATION", "true").lower() == "true"
     
     @property
     def use_openrouter(self) -> bool:

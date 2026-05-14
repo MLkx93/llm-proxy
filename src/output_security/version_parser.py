@@ -221,7 +221,9 @@ def parse_constraint(constraint_str: str) -> List[VersionConstraint]:
     # Remove brackets and quotes if present
     constraint_str = constraint_str.strip().strip('[]').strip('"').strip("'")
 
-    # Split by spaces to get individual constraints
+    # Split by spaces and commas to get individual constraints
+    # Replace commas with spaces, then split on whitespace
+    constraint_str = constraint_str.replace(',', ' ')
     constraint_parts = constraint_str.split()
 
     constraints = []
