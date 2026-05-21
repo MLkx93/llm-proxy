@@ -1,0 +1,62 @@
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{images/architecture.png}
+\caption{High-level proxy architecture (API gateway, input detector, output engine, LLM providers).}
+\label{fig:arch-overview}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{images/input_credential_block.png}
+\caption{Credential detection – prompt containing a secret key is blocked.}
+\label{fig:test-credential}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{images/input_injection_block.png}
+\caption{Prompt‑injection detection – “ignore previous instructions” pattern blocked.}
+\label{fig:test-injection}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{images/input_pii_block.png}
+\caption{PII detection – email/phone/CC number blocked or redacted.}
+\label{fig:test-pii}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{images/output_allow.png}
+\caption{Allowed output – code uses a validated, CVE‑free package.}
+\label{fig:test-output-allow}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{images/output_block.png}
+\caption{Blocked output – vulnerable package detected by Nexus/CVE scan.}
+\label{fig:test-output-block}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{images/ui_main.png}
+\caption{Main view – model selector, API-key entry, chat window.}
+\label{fig:ui-main}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{images/ui_block.png}
+\caption{Blocked prompt – security rule triggered, error shown in chat.}
+\label{fig:ui-block}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{images/ui_output_block.png}
+\caption{Output blocked – vulnerable package intercepted before reaching the user.}
+\label{fig:ui-output-block}
+\end{figure}
