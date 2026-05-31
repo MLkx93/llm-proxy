@@ -31,7 +31,8 @@
 
 | Document | Scope | Use When |
 |----------|-------|----------|
-| **[QUICK_TEST_PROMPTS.md](QUICK_TEST_PROMPTS.md)** ⭐ | 19 copy-paste prompts | Quick testing, immediate feedback |
+| **[QUICK_TEST_PROMPTS.md](QUICK_TEST_PROMPTS.md)** ⭐ | 19 copy-paste prompts (Input Security) | Quick testing, immediate feedback |
+| **[MALICIOUS_CODE_TEST_PROMPTS.md](MALICIOUS_CODE_TEST_PROMPTS.md)** ⭐ | 40 copy-paste prompts (Output Security) | Test malicious code detection |
 | **[IMPLICIT_DETECTION_TEST.md](IMPLICIT_DETECTION_TEST.md)** | 30 realistic scenarios | Test implicit/hidden threat detection |
 | **[pii_redaction_test_prompts.md](pii_redaction_test_prompts.md)** | 34 comprehensive tests | Complete test coverage documentation |
 | **[TEST_SUITE_OVERVIEW.md](TEST_SUITE_OVERVIEW.md)** | Master test overview | Understand all test categories |
@@ -62,18 +63,21 @@ docs/
 ├── INDEX.md (YOU ARE HERE)
 │
 ├── 📍 TESTING ENTRY POINTS
-│   ├── QUICK_TEST_PROMPTS.md ⭐ (Start here for quick testing)
+│   ├── QUICK_TEST_PROMPTS.md ⭐ (Input Security - 19 prompts)
+│   ├── MALICIOUS_CODE_TEST_PROMPTS.md ⭐ (Output Security - 40 prompts)
 │   ├── IMPLICIT_DETECTION_TEST.md (Test real-world scenarios)
 │   └── README_TESTING.md (Understand full test structure)
 │
 ├── 📚 REFERENCE DOCUMENTATION
 │   ├── input_policy_behavior.md (Complete behavior reference)
+│   ├── MALICIOUS_CODE_DETECTOR.md (Malicious code detection guide)
 │   ├── multiple_pii_logging_example.md (Log format guide)
 │   ├── testing_quick_reference.md (Quick lookup matrix)
 │   └── TEST_SUITE_OVERVIEW.md (Test categories overview)
 │
 ├── 📋 TEST CATALOGS
 │   ├── pii_redaction_test_prompts.md (34 comprehensive tests)
+│   ├── malicious_code_test_prompts.md (40 test prompts)
 │   └── test_execution_template.md (Record results)
 │
 └── 🔧 INFRASTRUCTURE
@@ -84,7 +88,7 @@ docs/
 
 ## 📊 What Each Test Suite Tests
 
-### QUICK_TEST_PROMPTS.md (19 tests) ⭐ **START HERE**
+### QUICK_TEST_PROMPTS.md (19 tests) ⭐ **INPUT SECURITY**
 ```
 ✅ PII Redaction (4):
   - Email address
@@ -112,6 +116,71 @@ docs/
   - Tech question
   - Code review
   - Business question
+```
+
+### MALICIOUS_CODE_TEST_PROMPTS.md (40 tests) ⭐ **OUTPUT SECURITY**
+```
+❌ Obfuscation Attacks (5):
+  - Encode + execute (base64 + exec)
+  - Decode + run
+  - base64 execution
+  - Hide + exec patterns
+
+❌ Credential Exfiltration (5):
+  - Environment variables + server
+  - Collect env + API post
+  - Exfiltrate environ
+  - Send os.environ
+  - Gather + send via requests
+
+❌ Shell Injection (5):
+  - Run bash command
+  - os.system execution
+  - Download + execute
+  - curl pipe execution
+  - Arbitrary shell commands
+
+❌ Eval/Exec (5):
+  - eval() code execution
+  - exec() dynamic code
+  - String to code execution
+  - Code string + exec
+  - eval() user input
+
+❌ File Access (5):
+  - /etc/passwd reading
+  - SSH key access (~/.ssh/)
+  - AWS credentials (~/.aws/)
+  - /etc/ config files
+  - /etc/shadow extraction
+
+❌ Privilege Escalation (5):
+  - sudo execution
+  - chmod to 777
+  - chown file modification
+  - Privilege escalation
+  - setuid changes
+
+❌ Combined Attacks (5):
+  - Encode + exec + exfiltrate
+  - eval() + base64
+  - environ + base64 + exfil
+  - os.system() + curl + download
+  - exec() + os.environ
+
+❌ Socket/Network (5):
+  - Socket + environ data
+  - Socket + os.environ transmit
+  - urllib + environ
+  - requests POST environ
+  - Socket + system info exfil
+
+✅ Safe Prompts (5):
+  - CSV reading
+  - Flask server
+  - Fibonacci
+  - API requests
+  - List sorting
 ```
 
 ### IMPLICIT_DETECTION_TEST.md (30 tests)
@@ -159,41 +228,58 @@ Complete comprehensive test catalog with:
 
 ## 🚀 Quick Start Paths
 
-### Path 1: Fast Testing (10 minutes)
-1. Open **[QUICK_TEST_PROMPTS.md](QUICK_TEST_PROMPTS.md)**
+### Path 1: Fast Input Security Testing (10 minutes)
+1. Open **[QUICK_TEST_PROMPTS.md](QUICK_TEST_PROMPTS.md)** - 19 test prompts
 2. Copy a prompt
 3. Test with curl command provided
 4. Check status code and audit log
 5. Done
 
-### Path 2: Thorough Testing (1-2 hours)
+### Path 2: Fast Output Security Testing (10 minutes)
+1. Open **[MALICIOUS_CODE_TEST_PROMPTS.md](MALICIOUS_CODE_TEST_PROMPTS.md)** - 40 test prompts
+2. Copy a prompt
+3. Test with curl command provided
+4. Check for ❌ 400 MALICIOUS_CODE_PATTERN
+5. Done
+
+### Path 3: Thorough Testing (1-2 hours)
 1. Read **[README_TESTING.md](README_TESTING.md)** - understand structure
 2. Use **[IMPLICIT_DETECTION_TEST.md](IMPLICIT_DETECTION_TEST.md)** - realistic scenarios
 3. Record results in **[test_execution_template.md](test_execution_template.md)**
 4. Reference **[input_policy_behavior.md](input_policy_behavior.md)** as needed
 5. Verify logs with **[multiple_pii_logging_example.md](multiple_pii_logging_example.md)**
 
-### Path 3: Comprehensive Coverage (2-4 hours)
+### Path 4: Comprehensive Coverage (2-4 hours)
 1. Read **[TEST_SUITE_OVERVIEW.md](TEST_SUITE_OVERVIEW.md)** - complete overview
 2. Use **[pii_redaction_test_prompts.md](pii_redaction_test_prompts.md)** - all 34 tests
-3. Use **[testing_quick_reference.md](testing_quick_reference.md)** - checklist
-4. Record in **[test_execution_template.md](test_execution_template.md)**
-5. Create formal test report
+3. Use **[MALICIOUS_CODE_TEST_PROMPTS.md](MALICIOUS_CODE_TEST_PROMPTS.md)** - all 40 tests
+4. Use **[testing_quick_reference.md](testing_quick_reference.md)** - checklist
+5. Record in **[test_execution_template.md](test_execution_template.md)**
 
-### Path 4: Understanding Behavior
-1. Read **[input_policy_behavior.md](input_policy_behavior.md)** - complete reference
-2. Reference **[multiple_pii_logging_example.md](multiple_pii_logging_example.md)** - log format
-3. Check **[README_TESTING.md](README_TESTING.md)** - troubleshooting section
+### Path 5: Understanding Behavior
+1. Read **[input_policy_behavior.md](input_policy_behavior.md)** - complete input reference
+2. Read **[MALICIOUS_CODE_DETECTOR.md](MALICIOUS_CODE_DETECTOR.md)** - complete output reference
+3. Reference **[multiple_pii_logging_example.md](multiple_pii_logging_example.md)** - log format
+4. Check **[README_TESTING.md](README_TESTING.md)** - troubleshooting section
 
 ---
 
 ## 📝 File Descriptions
 
-### QUICK_TEST_PROMPTS.md ⭐
+### QUICK_TEST_PROMPTS.md ⭐ (INPUT SECURITY)
 - **Lines:** ~200
 - **Format:** Copy-paste ready prompts
+- **Tests:** 19 prompts (PII, credentials, injection)
 - **Includes:** Curl commands, checklist, log examples
-- **Best for:** Quick testing, getting started
+- **Best for:** Quick input security testing
+- **Time:** 10-30 minutes
+
+### MALICIOUS_CODE_TEST_PROMPTS.md ⭐ (OUTPUT SECURITY)
+- **Lines:** ~400
+- **Format:** Copy-paste ready prompts
+- **Tests:** 40 prompts (obfuscation, exfiltration, shells, eval/exec, files, privilege, combined, sockets)
+- **Includes:** Risk levels, expected results, audit log examples
+- **Best for:** Quick output security testing
 - **Time:** 10-30 minutes
 
 ### IMPLICIT_DETECTION_TEST.md
@@ -203,12 +289,19 @@ Complete comprehensive test catalog with:
 - **Best for:** Testing detection in realistic contexts
 - **Time:** 1-2 hours
 
+### MALICIOUS_CODE_DETECTOR.md
+- **Lines:** ~400
+- **Format:** Complete reference documentation
+- **Covers:** Pattern detection, risk levels, configuration, examples
+- **Best for:** Understanding malicious code detection behavior
+- **Time:** Reference as needed
+
 ### pii_redaction_test_prompts.md
 - **Lines:** ~675
 - **Format:** Comprehensive test catalog
 - **Tests:** 34 complete scenarios
 - **Includes:** Expected outputs, audit log verification
-- **Best for:** Complete test coverage
+- **Best for:** Complete input security test coverage
 - **Time:** 2-4 hours
 
 ### input_policy_behavior.md
@@ -256,17 +349,19 @@ Complete comprehensive test catalog with:
 
 | File | Lines | Type | Status |
 |------|-------|------|--------|
-| QUICK_TEST_PROMPTS.md | ~200 | Copy-paste prompts | ⭐ START HERE |
+| QUICK_TEST_PROMPTS.md | ~200 | Copy-paste prompts | ⭐ Input Security |
+| MALICIOUS_CODE_TEST_PROMPTS.md | ~400 | Copy-paste prompts | ⭐ Output Security |
 | IMPLICIT_DETECTION_TEST.md | ~600 | Realistic scenarios | Core |
 | pii_redaction_test_prompts.md | ~675 | Comprehensive tests | Core |
 | input_policy_behavior.md | ~500 | Reference | Reference |
+| MALICIOUS_CODE_DETECTOR.md | ~400 | Reference | Reference |
 | README_TESTING.md | ~400 | Master guide | Navigation |
 | TEST_SUITE_OVERVIEW.md | ~400 | Test overview | Reference |
 | testing_quick_reference.md | ~150 | Quick lookup | Checklist |
 | test_execution_template.md | ~350 | Test form | Reporting |
 | multiple_pii_logging_example.md | ~100 | Log examples | Reference |
 | nexus_fix_spec.md | ~150 | Infrastructure | Legacy |
-| **TOTAL** | **~3,525** | | |
+| **TOTAL** | **~4,325** | | |
 
 ---
 
@@ -316,12 +411,15 @@ Complete comprehensive test catalog with:
 
 | Need | Go To |
 |------|-------|
-| Quick start testing | QUICK_TEST_PROMPTS.md |
+| Quick input security testing | QUICK_TEST_PROMPTS.md |
+| Quick output security testing | MALICIOUS_CODE_TEST_PROMPTS.md |
 | Test everything | IMPLICIT_DETECTION_TEST.md |
 | Understand blocking/redaction | input_policy_behavior.md |
+| Understand malicious code detection | MALICIOUS_CODE_DETECTOR.md |
 | Record test results | test_execution_template.md |
 | Read audit logs | multiple_pii_logging_example.md |
-| Full test coverage | pii_redaction_test_prompts.md |
+| Full input security coverage | pii_redaction_test_prompts.md |
+| Full output security coverage | MALICIOUS_CODE_TEST_PROMPTS.md |
 | Navigate all docs | README_TESTING.md |
 | Quick checklist | testing_quick_reference.md |
 | Test overview | TEST_SUITE_OVERVIEW.md |
@@ -330,10 +428,14 @@ Complete comprehensive test catalog with:
 
 ## 📌 Bookmarks
 
-**Most Used:**
-- ⭐ [QUICK_TEST_PROMPTS.md](QUICK_TEST_PROMPTS.md) - For testing
-- 📖 [input_policy_behavior.md](input_policy_behavior.md) - For understanding
+**Most Used (Testing):**
+- ⭐ [QUICK_TEST_PROMPTS.md](QUICK_TEST_PROMPTS.md) - Input security testing (19 prompts)
+- ⭐ [MALICIOUS_CODE_TEST_PROMPTS.md](MALICIOUS_CODE_TEST_PROMPTS.md) - Output security testing (40 prompts)
 - 📋 [test_execution_template.md](test_execution_template.md) - For reporting
+
+**Most Used (Understanding):**
+- 📖 [input_policy_behavior.md](input_policy_behavior.md) - Input security reference
+- 📖 [MALICIOUS_CODE_DETECTOR.md](MALICIOUS_CODE_DETECTOR.md) - Output security reference
 
 **Navigation:**
 - 🗺️ [README_TESTING.md](README_TESTING.md) - Master guide
@@ -347,4 +449,39 @@ Complete comprehensive test catalog with:
 
 **Last Updated:** 2026-05-31
 
-All documentation is centralized here. Start with **QUICK_TEST_PROMPTS.md** for immediate testing.
+All documentation is centralized here. 
+- Start with **QUICK_TEST_PROMPTS.md** for input security testing
+- Start with **MALICIOUS_CODE_TEST_PROMPTS.md** for output security testing
+
+---
+
+## New: Malicious Code Pattern Detector (Phase 0.5)
+
+**Status**: ✅ Implemented | **File**: `MALICIOUS_CODE_DETECTOR.md`
+
+Lightweight, always-on detection of malicious code patterns in LLM responses:
+- Detects obfuscated code execution (eval + base64)
+- Blocks credential exfiltration (os.environ + network)
+- Catches shell injection attempts
+- Identifies sensitive file access attempts
+- Runs **before** vulnerability scanning (Phase 0.5)
+- ~1-2ms overhead per code block
+- Default enabled, configurable risk level
+
+**Quick Test**:
+```bash
+# This should block (exec + base64 = obfuscation)
+curl -X POST http://localhost:8080/v1/chat/completions \
+  -H "Authorization: Bearer local-dev-key" \
+  -d '{"model":"claude-3-sonnet","messages":[{"role":"user","content":"Show me obfuscated code"}]}'
+# Result: 400 Bad Request (MALICIOUS_CODE_PATTERN)
+```
+
+**Key Features**:
+- Reuses existing RuleSet infrastructure from sandbox
+- Combination scoring (eval+base64 = CRITICAL, not just HIGH)
+- Pure regex (no Docker, no external APIs)
+- Integrates seamlessly into output security pipeline
+
+See `MALICIOUS_CODE_DETECTOR.md` for complete documentation, test cases, and configuration.
+

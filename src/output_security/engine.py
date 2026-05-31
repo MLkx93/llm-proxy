@@ -19,6 +19,7 @@ from datetime import datetime
 import asyncio
 
 from .code_parser import extract_code_blocks, CodeBlock
+from .malicious_code_detector import MaliciousCodeDetector, MaliciousCodeResult
 from .nexus import validate_package, ValidationResult
 from .vulnerability_scanner import (
     scan_package_cached,
@@ -56,6 +57,7 @@ logger = get_logger("output_security")
 
 class SecurityPhase(Enum):
     """Security phases in execution order."""
+    MALICIOUS_CODE = "MALICIOUS_CODE"
     NEXUS = "NEXUS"
     VULNERABILITY = "VULNERABILITY"
     VERSION = "VERSION"
@@ -149,12 +151,17 @@ class SecurityOrchestrator:
         self.early_termination = early_termination
         self.fail_safe = fail_safe
         self._advisory_db: Optional[SecurityAdvisoryDatabase] = None
+        self.malicious_code_detector = MaliciousCodeDetector()
     
     async def _get_advisory_db(self) -> SecurityAdvisoryDatabase:
         """Get or create advisory database."""
         if self._advisory_db is None:
             self._advisory_db = SecurityAdvisoryDatabase()
         return self._advisory_db
+
+    def _check_malicious_code(self, code: str) -> MaliciousCodeResult:
+        """Check code for malicious patterns (Phase 0.5)."""
+        return self.malicious_code_detector.scan(code)
     
     async def check_package(
         self,
@@ -575,6 +582,16 @@ async def check(response_text: str) -> OutputPolicyResult:
         return OutputPolicyResult(allowed=True)
 
     for block in blocks:
+        # Phase 0.5: Malicious code pattern detection (always-on)
+        if block.code and settings.MALICIOUS_CODE_ENABLED:
+            mal_result = orchestrator._check_malicious_code(block.code)
+            if not mal_result.allowed:
+                return OutputPolicyResult(
+                    allowed=False,
+                    block_code=mal_result.block_code,
+                    block_reason=mal_result.block_reason,
+                )
+
         if not block.dependencies:
             if block.code and settings.SANDBOX_ENABLED:
                 code_result = await orchestrator.check_code(block.code, block.language)
@@ -593,7 +610,7 @@ async def check(response_text: str) -> OutputPolicyResult:
                 ecosystem=dep.source_type,
                 source_type=dep.source_type
             )
-            
+
             if not result.allowed:
                 return OutputPolicyResult(
                     allowed=False,
@@ -622,6 +639,33 @@ async def check_full(response_text: str) -> SecurityCheckResult:
         )
 
     for block in blocks:
+        # Phase 0.5: Malicious code pattern detection
+        if block.code and settings.MALICIOUS_CODE_ENABLED:
+            mal_start = datetime.now()
+            mal_result = orchestrator._check_malicious_code(block.code)
+            mal_time = (datetime.now() - mal_start).total_seconds() * 1000
+
+            all_phase_results.append(PhaseResult(
+                phase=SecurityPhase.MALICIOUS_CODE,
+                passed=mal_result.allowed,
+                execution_time_ms=mal_time,
+                details={
+                    "risk_level": mal_result.risk_level,
+                    "violation_count": len(mal_result.violations)
+                }
+            ))
+
+            if not mal_result.allowed:
+                return SecurityCheckResult(
+                    allowed=False,
+                    block_code=mal_result.block_code,
+                    block_reason=mal_result.block_reason,
+                    phase_results=all_phase_results,
+                    total_execution_time_ms=(datetime.now() - start_time).total_seconds() * 1000,
+                    security_grade="F",
+                    risk_level="CRITICAL"
+                )
+
         if block.code and settings.SANDBOX_ENABLED:
             code_result = await orchestrator.check_code(block.code, block.language)
             all_phase_results.extend(code_result.phase_results)
@@ -648,7 +692,7 @@ async def check_full(response_text: str) -> SecurityCheckResult:
 
     if all_results:
         return all_results[0]
-    
+
     return SecurityCheckResult(
         allowed=True,
         phase_results=all_phase_results,
