@@ -15,16 +15,16 @@ class Settings:
     # Direct provider API keys (optional - bypass OpenRouter)
     OPENAI_API_KEY: str = _env("OPENAI_API_KEY")
     ANTHROPIC_API_KEY: str = _env("ANTHROPIC_API_KEY")
-
+    
     # LiteLLM proxy (legacy - ignored when OPENROUTER_API_KEY is set)
     LITELLM_API_BASE: str = _env("LITELLM_API_BASE")
     LITELLM_API_KEY: str = _env("LITELLM_API_KEY")
-
+    
     # Nexus
     NEXUS_BASE_URL: str = _env("NEXUS_BASE_URL")
     NEXUS_API_KEY: str = _env("NEXUS_API_KEY")
     NEXUS_FAIL_OPEN: bool = _env("NEXUS_FAIL_OPEN", "false").lower() == "true"
-
+    
     # Logging
     AUDIT_LOG_PATH: str = _env("AUDIT_LOG_PATH", "logs/audit.jsonl")
     
@@ -60,10 +60,13 @@ class Settings:
     SANDBOX_NETWORK_ENABLED: bool = _env("SANDBOX_NETWORK_ENABLED", "false").lower() == "true"
     SANDBOX_RISK_THRESHOLD: float = float(_env("SANDBOX_RISK_THRESHOLD", "6.0"))  # For scanning/loading
     SANDBOX_BLOCK_RISK_THRESHOLD: float = float(_env("SANDBOX_BLOCK_RISK_THRESHOLD", "8.0"))  # For blocking decisions
-
+    
     # PII Handling
     PII_ACTION: str = _env("PII_ACTION", "redact")  # Options: "block", "redact"
-
+    
+    # Credential Handling
+    CREDENTIAL_ACTION: str = _env("CREDENTIAL_ACTION", "block")  # Options: "block", "redact"
+    
     # Guardrails (Phase 5)
     GUARDRAILS_ENABLED: bool = _env("GUARDRAILS_ENABLED", "false").lower() == "true"
     GUARDRAILS_TOXICITY_THRESHOLD: float = float(_env("GUARDRAILS_TOXICITY_THRESHOLD", "5.0"))
@@ -132,8 +135,8 @@ class Settings:
             "llama-3-8b": "meta-llama/llama-3-8b-instruct",
             "llama-3-70b": "meta-llama/llama-3-70b-instruct",
         }
-
-            
+        
+        
         # Check if model is already in OpenRouter format
         if model.startswith("anthropic/") or model.startswith("openai/") or model.startswith("meta-llama/"):
             return model

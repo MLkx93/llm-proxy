@@ -105,7 +105,7 @@ async def chat_completions(request: Request, body: ChatCompletionRequest):
     })
 
     # --- Input Policy Engine ---
-    policy = input_policy.check(messages_raw)
+    sanitized_messages, policy, redaction_details = input_policy.check_and_sanitize_openai(messages_raw)
     if not policy.allowed:
         logger.warning("input_blocked", extra={
             "request_id": request_id,
@@ -115,9 +115,11 @@ async def chat_completions(request: Request, body: ChatCompletionRequest):
         })
         audit.emit(
             request_id=request_id, app_id=app_id, action="BLOCKED",
-            messages=messages_raw, model=body.model,
+            messages=sanitized_messages, model=body.model,
             block_code=policy.block_code,
             latency_ms=_elapsed(start),
+            findings=policy.findings,
+            redaction_details=redaction_details,
         )
         return _block(policy.block_code, policy.block_reason, request_id, 400)
 
@@ -135,7 +137,7 @@ async def chat_completions(request: Request, body: ChatCompletionRequest):
             
             openai_body = {
                 "model": transformed_model,
-                "messages": messages_raw,
+                "messages": sanitized_messages,
             }
             if body.temperature is not None:
                 openai_body["temperature"] = body.temperature
@@ -159,7 +161,7 @@ async def chat_completions(request: Request, body: ChatCompletionRequest):
             import litellm
             llm_kwargs: dict = dict(
                 model=f"openai/{body.model}",
-                messages=messages_raw,
+                messages=sanitized_messages,
                 temperature=body.temperature,
                 max_tokens=body.max_tokens,
                 api_base=settings.LITELLM_API_BASE,
@@ -224,16 +226,26 @@ async def chat_completions(request: Request, body: ChatCompletionRequest):
 
     # --- Success ---
     latency_ms = _elapsed(start)
-    logger.info("request_completed", extra={
+    log_extra = {
         "request_id": request_id,
         "app_id": app_id,
         "model": body.model,
         "latency_ms": latency_ms,
-    })
+    }
+    # Log redaction details if any occurred
+    if redaction_details.get("redacted"):
+        log_extra["redaction"] = {
+            "pii_types": redaction_details.get("pii_types"),
+            "count": redaction_details.get("redaction_count"),
+            "method": redaction_details.get("redaction_method"),
+        }
+    logger.info("request_completed", extra=log_extra)
     audit.emit(
         request_id=request_id, app_id=app_id, action="ALLOWED",
         messages=messages_raw, model=body.model,
         latency_ms=latency_ms,
+        findings=policy.findings if policy.findings else None,
+        redaction_details=redaction_details,
     )
 
     return JSONResponse(content=response_dict)
@@ -469,7 +481,7 @@ async def anthropic_messages(request: Request, body: AnthropicMessageRequest):
     # --- Input Policy Engine ---
     # Check last message for violations (block if found).
     # Redact violations in older messages (don't block, just sanitize).
-    sanitized_body, policy = input_policy.check_and_sanitize_anthropic(body.model_dump())
+    sanitized_body, policy, redaction_details = input_policy.check_and_sanitize_anthropic(body.model_dump())
     prompt_text = input_policy.extract_text_anthropic(body.model_dump())
     p_hash = _hash_text(prompt_text)
 
@@ -484,6 +496,8 @@ async def anthropic_messages(request: Request, body: AnthropicMessageRequest):
             request_id=request_id, app_id=app_id, action="BLOCKED",
             model=model, block_code=policy.block_code,
             prompt_hash=p_hash, latency_ms=_elapsed(start),
+            findings=policy.findings,
+            redaction_details=redaction_details,
         )
         return _anthropic_block(policy.block_code, policy.block_reason, 400)
 
@@ -584,16 +598,26 @@ async def anthropic_messages(request: Request, body: AnthropicMessageRequest):
 
     # --- Success ---
     latency_ms = _elapsed(start)
-    logger.info("request_completed", extra={
+    log_extra = {
         "request_id": request_id,
         "app_id": app_id,
         "model": model,
         "latency_ms": latency_ms,
         "endpoint": "/v1/messages",
-    })
+    }
+    # Log redaction details if any occurred
+    if redaction_details.get("redacted"):
+        log_extra["redaction"] = {
+            "pii_types": redaction_details.get("pii_types"),
+            "count": redaction_details.get("redaction_count"),
+            "method": redaction_details.get("redaction_method"),
+        }
+    logger.info("request_completed", extra=log_extra)
     audit.emit(
         request_id=request_id, app_id=app_id, action="ALLOWED",
         model=model, prompt_hash=p_hash, latency_ms=latency_ms,
+        findings=policy.findings if policy.findings else None,
+        redaction_details=redaction_details,
     )
 
     return JSONResponse(content=response_dict)

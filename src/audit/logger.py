@@ -60,6 +60,8 @@ def emit(
     block_code: Optional[str] = None,
     latency_ms: Optional[int] = None,
     prompt_hash: Optional[str] = None,
+    findings: Optional[list[str]] = None,      # NEW: List of detected PII/secrets
+    redaction_details: Optional[dict] = None,  # NEW: Redaction metadata
 ) -> None:
     """
     Write a single audit event. Safe to call from async context —
@@ -67,6 +69,20 @@ def emit(
 
     If prompt_hash is provided, it's used directly (for Anthropic-format requests
     where messages are pre-extracted). Otherwise, computed from messages.
+    
+    New parameters:
+    - findings: List of detected PII/secrets types (e.g., ["EMAIL_ADDRESS", "OPENAI_API_KEY"])
+    - redaction_details: Dictionary with redaction metadata (see below)
+    
+    Redaction details structure:
+    {
+        "redacted": bool,           # True if redaction occurred
+        "pii_types": list[str],     # ["EMAIL_ADDRESS", "PHONE_NUMBER", etc.]
+        "redaction_count": int,     # Number of items redacted
+        "original_hash": str,       # SHA-256 before redaction
+        "sanitized_hash": str,     # SHA-256 after redaction
+        "redaction_method": str,    # "presidio" or "regex"
+    }
     """
     computed_hash = prompt_hash
     if computed_hash is None and messages:
@@ -82,6 +98,13 @@ def emit(
         "prompt_hash": computed_hash,
         "latency_ms": latency_ms,
     }
+    
+    # Add new fields if provided
+    if findings:
+        event["findings"] = findings
+    if redaction_details:
+        event["redaction_details"] = redaction_details
+        
     try:
         _write(event)
     except OSError as exc:
