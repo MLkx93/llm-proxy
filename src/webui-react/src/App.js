@@ -2,7 +2,6 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, NavLink } from 'react-router-dom';
 import ModelTester from './components/ModelTester';
 import Dashboard from './components/Dashboard';
-import StateReport from './components/StateReport';
 import './App.css';
 
 function App() {
@@ -27,12 +26,6 @@ function App() {
             >
               📊 Dashboard
             </NavLink>
-            <NavLink
-              to="/state"
-              className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
-            >
-              📋 State Report
-            </NavLink>
           </nav>
         </header>
 
@@ -41,7 +34,6 @@ function App() {
           <Routes>
             <Route path="/" element={<ModelTester />} />
             <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/state" element={<StateReport />} />
           </Routes>
         </main>
 

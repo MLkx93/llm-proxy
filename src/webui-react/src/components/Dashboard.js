@@ -96,18 +96,18 @@ function Dashboard() {
 
   const getFeatureDescription = (featureName) => {
     const descriptions = {
-      'PII Detection': 'Automatically detects and blocks personally identifiable information like social security numbers, credit cards, email addresses, and phone numbers from being sent to LLMs.',
-      'Credential Detection': 'Prevents API keys, passwords, tokens, and other secrets from leaking in prompts to LLM providers.',
-      'Prompt Injection': 'Blocks malicious attempts to manipulate LLM behavior through crafted prompts that ignore safety guidelines.',
-      'Smart Redaction': 'Context-aware removal of sensitive information while preserving utility for legitimate LLM processing.',
-      'Nexus Validation': 'Verifies that any packages or dependencies mentioned in LLM-generated code exist in your approved internal repository.',
-      'Vulnerability Scan': 'Checks packages against public vulnerability databases (OSV, NVD/CVE) to identify known security issues.',
-      'Version Validation': 'Ensures that package versions mentioned in generated code are not affected by known vulnerabilities.',
-      'Dependency Tree': 'Analyzes the full dependency graph of generated code to catch transitive vulnerabilities.',
-      'Sandbox Execution': 'Runs generated code in isolated Docker containers with resource limits to detect malicious behavior.',
-      'Risk Scoring': 'Combines multiple risk factors into a weighted score to help prioritize security reviews.',
-      'Rate Limiting': 'Prevents abuse and ensures fair usage by limiting the number of requests per application or user.',
-      'Circuit Breaker': 'Automatically temporarily stops requests to failing services to prevent cascading failures.'
+      'PII Detection': 'Detects 11+ types of PII: emails, phones (3 formats), SSNs, credit cards (VISA/MC/AMEX), driver\'s licenses, passports, private IPs, IBANs, person names, and medical licenses. Uses 3-layer detection: fast regex secrets (10μs), format patterns, and Presidio NLP entity recognition.',
+      'Credential Detection': 'Catches API keys (OpenAI, Anthropic, GitHub, AWS), Bearer tokens, private keys, passwords, and connection strings. Uses regex patterns matched against exact secret formats. Found credentials = 400 Bad Request block (not redacted).',
+      'Prompt Injection': 'Blocks 8 jailbreak patterns: ignore instructions, disregard prompt, DAN mode, role hijack, system prompt leak, context escape, translator trick, and more. Pattern-based detection catches explicit attempts. Always blocks (non-configurable).',
+      'Smart Redaction': 'Replaces detected PII with [REDACTED]. Presidio handles context (names in text vs. code), preserves utility for LLM processing. Logs original hash, sanitized hash, and redaction count in audit trail.',
+      'Nexus Validation': 'Extracts package names from generated code and checks if they exist in your approved Nexus/internal repository. If package not found → blocks with error. Optional feature (NEXUS_BASE_URL env var).',
+      'Vulnerability Scan': 'Queries OSV database and NVD/CVE for known vulnerabilities. Checks if package versions have advisories. Results scored by severity (CRITICAL/HIGH/MEDIUM/LOW). Configurable via VULN_SCAN_ENABLED env var.',
+      'Version Validation': 'Parses semantic versioning and matches against SQLite advisory database. Determines if a specific version is vulnerable (e.g., "1.2.3 is bad, 1.2.4+ is safe"). Helps validate LLM-generated version numbers.',
+      'Dependency Tree': 'Recursively resolves transitive dependencies. Catches indirect vulnerabilities (e.g., your package is safe, but it depends on a vulnerable package). Prevents supply chain attacks. Optional feature.',
+      'Sandbox Execution': 'Runs suspicious code in isolated Docker containers with resource limits (CPU, memory, timeout). Detects runtime behavior anomalies. Behavioral detection finds obfuscation, network requests, and malicious patterns.',
+      'Risk Scoring': 'Weighs 5 factors: vulnerability severity, code origin, execution behavior, dependency chain depth, and anomaly detection. Final score: 0-100. Helps prioritize which generated code needs review.',
+      'Rate Limiting': 'Token bucket algorithm: configurable requests/minute per API key and app. Prevents abuse and ensures fair resource distribution. Returns 429 Too Many Requests when limit exceeded.',
+      'Circuit Breaker': 'Monitors LLM provider health. After 3 consecutive failures, temporarily stops requests (30-60s). Prevents cascading failures and gives upstream time to recover. Auto-recovers with exponential backoff.'
     };
 
     return descriptions[featureName] || 'Provides advanced security protection for LLM interactions.';
@@ -162,42 +162,61 @@ function Dashboard() {
       <div className="card overview-full">
         <h2>🎯 What is the LLM Security Proxy?</h2>
         <p className="overview-description">
-          The LLM Security Proxy is a centralized security gateway designed to protect organizations
-          using Large Language Models (LLMs) by providing comprehensive security controls over
-          both input prompts and LLM-generated outputs.
+          The LLM Security Proxy is a centralized security gateway that sits between your applications
+          and LLM providers (OpenAI, Anthropic, etc.), protecting against sensitive data leaks, malicious
+          prompts, unsafe code generation, and vulnerable dependencies. It provides real-time threat detection,
+          smart redaction, and comprehensive audit logging.
         </p>
 
         <div className="overview-grid">
           <div className="overview-card">
             <div className="overview-icon">🔒</div>
             <div className="overview-content">
-              <h3>Input Protection</h3>
-              <p>Scans all incoming prompts for sensitive data (PII, credentials),
-                 prompt injection attempts, and malicious content before reaching LLMs.</p>
+              <h3>Input Security (What Happens to Your Prompts)</h3>
+              <p>
+                <strong>PII Redaction:</strong> Detects emails, phone numbers, SSNs, credit cards, driver's licenses,
+                and person names → automatically replaces with [REDACTED]<br/>
+                <strong>Credential Blocking:</strong> Catches API keys, passwords, tokens, connection strings
+                → blocks the request with 400 error<br/>
+                <strong>Injection Protection:</strong> Stops jailbreak attempts and prompt manipulation
+                → blocks harmful instructions instantly
+              </p>
             </div>
           </div>
           <div className="overview-card">
             <div className="overview-icon">🛡️</div>
             <div className="overview-content">
-              <h3>Output Validation</h3>
-              <p>Analyzes LLM-generated responses for security risks including
-                 unsafe code, vulnerable dependencies, and data leakage.</p>
+              <h3>Output Validation (What Happens to LLM Responses)</h3>
+              <p>
+                <strong>Dependency Checking:</strong> Verifies packages exist in approved repositories<br/>
+                <strong>Vulnerability Scanning:</strong> Checks against OSV/CVE databases for known issues<br/>
+                <strong>Sandbox Execution:</strong> Runs generated code in isolated Docker containers<br/>
+                <strong>Risk Scoring:</strong> Combines multiple factors to flag unsafe content
+              </p>
             </div>
           </div>
           <div className="overview-card">
             <div className="overview-icon">🔄</div>
             <div className="overview-content">
-              <h3>Provider Agnostic</h3>
-              <p>Works with any LLM provider (OpenAI, Anthropic, etc.) through
-                 a unified interface, giving you flexibility without compromising security.</p>
+              <h3>Universal Coverage (Works Everywhere)</h3>
+              <p>
+                <strong>Provider Agnostic:</strong> Works with OpenAI, Anthropic, Google, DeepSeek,
+                and any OpenRouter model<br/>
+                <strong>Format Support:</strong> OpenAI-compatible and Anthropic-compatible endpoints<br/>
+                <strong>Smart Redaction:</strong> Preserves legitimate content while removing threats
+              </p>
             </div>
           </div>
           <div className="overview-card">
             <div className="overview-icon">📊</div>
             <div className="overview-content">
-              <h3>Enterprise Ready</h3>
-              <p>Provides audit logging, monitoring, and policy enforcement
-                 suitable for enterprise deployment and compliance requirements.</p>
+              <h3>Enterprise-Grade Security</h3>
+              <p>
+                <strong>Audit Logging:</strong> SHA-256 hashed requests with detection findings and
+                redaction details<br/>
+                <strong>Real-Time Monitoring:</strong> Dashboard shows health, metrics, and blocked threats<br/>
+                <strong>Rate Limiting:</strong> Prevents abuse and ensures fair usage across apps
+              </p>
             </div>
           </div>
         </div>
@@ -205,215 +224,88 @@ function Dashboard() {
 
       {/* How It Works Section */}
       <div className="card how-it-works-full">
-        <h2>⚙️ How the Security Pipeline Works</h2>
+        <h2>⚙️ How Every Request is Protected (5-Stage Pipeline)</h2>
         <p className="how-it-works-description">
-          Every LLM request follows a 5-stage security pipeline designed to catch
-          threats at multiple layers while minimizing false positives:
+          Every LLM request and response is scanned through 5 security layers. Threats are detected
+          using NLP-based entity recognition (Presidio), pattern matching, and behavioral analysis:
         </p>
         <div className="pipeline-container-full">
           <div className="pipeline-step-full">
             <div className="step-circle">1</div>
-            <div className="step-label">Authentication & Rate Limiting</div>
+            <div className="step-label">🔑 Auth & Rate Limiting</div>
             <div className="step-description">
-              Verify API keys, enforce rate limits, and identify the application
-              making the request for proper logging and policy application.
+              Verify API keys and enforce rate limits. Identify which application is making the request
+              for proper audit logging and policy enforcement.
             </div>
           </div>
           <div className="pipeline-arrow">→</div>
           <div className="pipeline-step-full">
             <div className="step-circle">2</div>
-            <div className="step-label">Input Policy Engine</div>
+            <div className="step-label">🛡️ Input Policy (Scan & Redact/Block)</div>
             <div className="step-description">
-              Scan prompts for PII (SSN, credit cards, emails), API keys/secrets,
-              and prompt injection attacks using NER and pattern matching.
+              <strong>Layer 1 - Fast Secrets:</strong> Regex patterns for API keys, passwords, tokens<br/>
+              <strong>Layer 2 - Format Patterns:</strong> SSN formats, credit cards, phone numbers<br/>
+              <strong>Layer 3 - NLP Recognition:</strong> Presidio entity recognition for PII in context<br/>
+              <strong>Action:</strong> PII → [REDACTED], Credentials → Block (400), Injections → Block (400)
             </div>
           </div>
           <div className="pipeline-arrow">→</div>
           <div className="pipeline-step-full">
             <div className="step-circle">3</div>
-            <div className="step-label">LLM Provider</div>
+            <div className="step-label">🚀 Forward to LLM</div>
             <div className="step-description">
-              Forward cleaned request to selected LLM provider (OpenAI, Anthropic,
-              etc.) for actual response generation.
+              Send cleaned/redacted prompt to your selected provider (OpenAI, Anthropic, DeepSeek,
+              Gemini, etc.). Proxy translates between OpenAI and Anthropic formats transparently.
             </div>
           </div>
           <div className="pipeline-arrow">→</div>
           <div className="pipeline-step-full">
             <div className="step-circle">4</div>
-            <div className="step-label">Output Security Engine</div>
+            <div className="step-label">🔬 Output Validation (Code Safety)</div>
             <div className="step-description">
-              Validate generated code for safety: check dependencies against
-              approved repositories, scan for vulnerabilities, and execute in sandbox.
+              <strong>Parse Code:</strong> Extract packages from generated responses<br/>
+              <strong>Verify Packages:</strong> Check dependencies exist in approved Nexus repository<br/>
+              <strong>Scan Vulnerabilities:</strong> Check versions against OSV/CVE databases<br/>
+              <strong>Test Code:</strong> Run suspicious code in isolated Docker sandbox with limits
             </div>
           </div>
           <div className="pipeline-arrow">→</div>
           <div className="pipeline-step-full">
             <div className="step-circle">5</div>
-            <div className="step-label">Secure Response Delivery</div>
+            <div className="step-label">✅ Return Safe Response</div>
             <div className="step-description">
-              Return validated, safe response to your application or block with
-              detailed explanation if security risks are detected.
+              Return validated response to your app or block with detailed error. Log everything
+              to audit.jsonl with redaction details, findings, and threat analysis.
             </div>
           </div>
         </div>
       </div>
 
-      <div className="dashboard-grid">
-        {/* Health Status */}
-        {health && health.status && (
-          <div className="card health-status">
-            <h2>🏥 System Health</h2>
-            <div className={`status ${getStatusColor(health.status)}`}>
-              {health.status === 'ok' ? '✅' : '⚠️'} {health.status?.toUpperCase() || 'UNKNOWN'}
-            </div>
-            <p>Service: {health.service || 'Unknown'}</p>
-          </div>
-        )}
-
-        {/* Metrics */}
-        {metrics && metrics.total_requests !== undefined && (
-          <div className="card metrics">
-            <h2>📈 Request Metrics</h2>
-            <div className="metric-grid">
-              <div className="metric">
-                <div className="metric-value">{metrics.total_requests || 0}</div>
-                <div className="metric-label">Total Requests</div>
-              </div>
-              <div className="metric">
-                <div className="metric-value">{metrics.successful_requests || 0}</div>
-                <div className="metric-label">Successful</div>
-              </div>
-              <div className="metric">
-                <div className="metric-value">{metrics.blocked_requests || 0}</div>
-                <div className="metric-label">Blocked</div>
-              </div>
-              <div className="metric">
-                <div className="metric-value">{(metrics.avg_response_time || 0).toFixed(2)}s</div>
-                <div className="metric-label">Avg Response</div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Codebase Stats */}
-        {codebaseStats && codebaseStats.total_files !== undefined && (
-          <div className="card codebase-stats">
-            <h2>📁 Codebase Statistics</h2>
-            <div className="stat-grid">
-              <div className="stat">
-                <div className="stat-value">{codebaseStats.total_files}</div>
-                <div className="stat-label">Total Files</div>
-              </div>
-              <div className="stat">
-                <div className="stat-value">{codebaseStats.total_lines}</div>
-                <div className="stat-label">Lines of Code</div>
-              </div>
-              <div className="stat">
-                <div className="stat-value">{codebaseStats.total_components}</div>
-                <div className="stat-label">Components</div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Security Features */}
-        {features && features.length > 0 && (
-          <div className="card security-features">
-            <h2>🛡️ Security Features Explained</h2>
-            <p className="features-intro">
-              Here are the security protections actively working to keep your LLM usage safe:
-            </p>
-            <div className="features-list-enhanced">
-              {features.map((feature, index) => (
-                <div key={index} className="feature-item-enhanced">
-                  <div className="feature-header">
-                    <span className={`feature-badge ${feature.badge === 'Active' ? 'active' : 'configurable'}`}>
-                      {feature.badge === 'Active' ? 'Active' : 'Configurable'}
-                    </span>
-                    <h3 className="feature-title">{feature.name}</h3>
-                  </div>
-                  <p className="feature-description-enhanced">
-                    {getFeatureDescription(feature.name)}
-                  </p>
-                  <div className="feature-category-badge category-{feature.category.toLowerCase()}">
-                    {feature.category}
-                  </div>
+      {/* Security Features Section */}
+      {features && features.length > 0 && (
+        <div className="card security-features-full">
+          <h2>🛡️ Complete Security Features</h2>
+          <p className="features-intro">
+            12 active protections working together to secure your LLM interactions:
+          </p>
+          <div className="features-list-grid">
+            {features.map((feature, index) => (
+              <div key={index} className="feature-card">
+                <div className="feature-icon">{feature.icon}</div>
+                <div className="feature-info">
+                  <h4 className="feature-name">{feature.name}</h4>
+                  <span className={`feature-badge ${feature.badge === 'Active' ? 'active' : 'configurable'}`}>
+                    {feature.badge === 'Active' ? '🟢 Active' : '⚙️ Configurable'}
+                  </span>
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Security Pipeline */}
-        <div className="card security-pipeline">
-          <h2>🔄 Security Pipeline</h2>
-          <div className="pipeline-steps">
-            {pipeline.map((phase, index) => (
-              <div key={index} className="pipeline-step">
-                <div className={`step-icon ${phase.status === 'Active' ? 'active' : 'inactive'}`}>
-                  {phase.status === 'Active' ? '✅' : '⏸️'}
-                </div>
-                <div className="step-info">
-                  <div className="step-name">{phase.name}</div>
-                  <div className="step-description">{phase.description}</div>
-                </div>
-                {phase.status === 'Active' && (
-                  <div className="step-time">
-                    {phase.avg_time_ms ? `${phase.avg_time_ms}ms` : 'N/A'}
-                  </div>
-                )}
+                <p className="feature-description">
+                  {getFeatureDescription(feature.name)}
+                </p>
               </div>
             ))}
           </div>
         </div>
-
-        {/* Issues */}
-        {issues && issues.length > 0 && (
-          <div className="card issues">
-            <h2>⚠️ Known Issues</h2>
-            <div className="issues-list">
-              {issues.map((issue, index) => (
-                <div key={index} className={`issue-item ${getSeverityColor(issue?.severity)}`}>
-                  <div className="issue-severity">{issue?.severity?.toUpperCase() || 'INFO'}</div>
-                  <div className="issue-title">{issue?.title || 'Untitled Issue'}</div>
-                  <div className="issue-description">{issue?.description || 'No description available'}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Components */}
-        <div className="card components">
-          <h2>🧩 Component Inventory</h2>
-          <div className="components-grid">
-            {components.map((component, index) => (
-              <div key={index} className="component-item">
-                <div className="component-name">{component.name}</div>
-                <div className="component-type">{component.type}</div>
-                <div className="component-status">{component.status}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Roadmap */}
-        {roadmap.length > 0 && (
-          <div className="card roadmap">
-            <h2>🗺️ Improvement Roadmap</h2>
-            <div className="roadmap-list">
-              {roadmap.map((item, index) => (
-                <div key={index} className="roadmap-item">
-                  <div className="roadmap-priority">{item.priority}</div>
-                  <div className="roadmap-title">{item.title}</div>
-                  <div className="roadmap-description">{item.description}</div>
-                  <div className="roadmap-eta">{item.eta || 'TBD'}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 }
