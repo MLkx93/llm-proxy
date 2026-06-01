@@ -32,6 +32,9 @@ class Settings:
     MALICIOUS_CODE_ENABLED: bool = _env("MALICIOUS_CODE_ENABLED", "true").lower() == "true"
     MALICIOUS_CODE_BLOCK_LEVEL: str = _env("MALICIOUS_CODE_BLOCK_LEVEL", "HIGH")  # HIGH or CRITICAL
 
+    # Timeouts
+    LLM_TIMEOUT_S: float = float(_env("LLM_TIMEOUT_S", "120"))
+
     # Streaming (opt-in — requires STREAMING_ENABLED=true to activate)
     STREAMING_ENABLED: bool = _env("STREAMING_ENABLED", "false").lower() == "true"
     

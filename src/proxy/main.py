@@ -17,7 +17,7 @@ from src.input_policy import engine as input_policy
 from src.output_security import engine as output_security
 from src.output_security.engine import extract_response_text, extract_response_text_anthropic
 from src.output_security.streaming_scanner import StreamingCodeScanner
-from src.proxy.streaming import stream_openai_response
+from src.proxy.streaming import stream_openai_response, stream_anthropic_response
 import litellm
 from config.settings import settings
 from src.audit import logger as audit
@@ -27,7 +27,7 @@ logger = get_logger("proxy")
 app = FastAPI(title="LLM Proxy", version="1.0.0")
 
 # Timeouts
-LLM_TIMEOUT_S = 60.0        # max seconds to wait for LLM provider
+LLM_TIMEOUT_S = settings.LLM_TIMEOUT_S
 OUTPUT_CHECK_TIMEOUT_S = 10.0  # max seconds for Nexus validation
 
 
@@ -236,6 +236,7 @@ async def chat_completions(request: Request, body: ChatCompletionRequest):
             "app_id": app_id,
             "block_code": output_policy.block_code,
             "blocked_packages": output_policy.blocked_packages,
+            "block_reason": output_policy.block_reason,
         })
         audit.emit(
             request_id=request_id, app_id=app_id, action="BLOCKED",
@@ -543,6 +544,24 @@ async def anthropic_messages(request: Request, body: AnthropicMessageRequest):
             "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
             "Content-Type": "application/json",
         }
+
+        # --- Streaming branch ---
+        if is_streaming and settings.STREAMING_ENABLED:
+            scanner = StreamingCodeScanner()
+            logger.info("streaming_request", extra={"request_id": request_id, "app_id": app_id, "endpoint": "/v1/messages"})
+            return StreamingResponse(
+                stream_anthropic_response(
+                    openai_body=openai_body,
+                    url=upstream_url,
+                    auth_headers=upstream_headers,
+                    scanner=scanner,
+                    model=model,
+                    timeout=LLM_TIMEOUT_S,
+                ),
+                media_type="text/event-stream",
+                headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"},
+            )
+
     elif settings.use_litellm:
         # Use LiteLLM proxy (legacy mode)
         upstream_url = f"{settings.LITELLM_API_BASE.rstrip('/')}/v1/chat/completions"

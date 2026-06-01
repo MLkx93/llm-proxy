@@ -223,6 +223,7 @@ class SecurityOrchestrator:
         
         # Phase 1: Vulnerability scanning
         if self.enable_vuln_scan and settings.VULN_SCAN_ENABLED:
+            from .vulnerability_scanner import get_safe_version
             vuln_start = datetime.now()
             try:
                 vuln_report: VulnerabilityReport = await scan_package_cached(
@@ -230,10 +231,16 @@ class SecurityOrchestrator:
                     ecosystem=ecosystem
                 )
                 vuln_time = (datetime.now() - vuln_start).total_seconds() * 1000
-                
+
+                # Suggest the lowest version that clears EVERY known vuln.
+                safe_ver: Optional[str] = None
+                if vuln_report.vulnerabilities:
+                    safe_ver = await get_safe_version(package_name, ecosystem)
+
                 should_block, reason = should_block_package(
                     vuln_report,
-                    min_severity=settings.VULN_BLOCK_MIN_SEVERITY
+                    min_severity=settings.VULN_BLOCK_MIN_SEVERITY,
+                    safe_version=safe_ver,
                 )
                 
                 phase_results.append(PhaseResult(

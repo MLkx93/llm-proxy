@@ -120,8 +120,8 @@ def _extract_deps(lang: str, code: str) -> list[Dependency]:
     for pat in patterns:
         for match in pat.finditer(code):
             pkg = match.group(1).strip()
-            if pkg and not _is_stdlib(lang, pkg):
-                # Normalise: take the top-level package name only
+            # Must start with a letter — filters out version numbers, digits, etc.
+            if pkg and pkg[0].isalpha() and not _is_stdlib(lang, pkg):
                 name = pkg.split(".")[0]
                 deps[name] = lang
     return [Dependency(name=n, source_type=t) for n, t in sorted(deps.items())]
@@ -142,7 +142,7 @@ def _extract_shell_deps(code: str) -> list[Dependency]:
             pkg = re.match(r'^([\w\-]+)', token)
             if pkg:
                 name = pkg.group(1)
-                if name and not _is_stdlib("python", name):
+                if name and name[0].isalpha() and not _is_stdlib("python", name):
                     deps[name] = "python"
 
     # npm install -> javascript
