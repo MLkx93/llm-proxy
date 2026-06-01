@@ -12,7 +12,7 @@ class ChatCompletionRequest(BaseModel):
     messages: List[Message]
     temperature: Optional[float] = None
     max_tokens: Optional[int] = None
-    # stream is intentionally excluded — streaming is blocked in v1
+    stream: Optional[bool] = False
 
 
 class AnthropicMessageRequest(BaseModel):

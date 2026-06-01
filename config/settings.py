@@ -31,6 +31,9 @@ class Settings:
     # Malicious Code Detection (Phase 0.5 - always-on pattern detection)
     MALICIOUS_CODE_ENABLED: bool = _env("MALICIOUS_CODE_ENABLED", "true").lower() == "true"
     MALICIOUS_CODE_BLOCK_LEVEL: str = _env("MALICIOUS_CODE_BLOCK_LEVEL", "HIGH")  # HIGH or CRITICAL
+
+    # Streaming (opt-in — requires STREAMING_ENABLED=true to activate)
+    STREAMING_ENABLED: bool = _env("STREAMING_ENABLED", "false").lower() == "true"
     
     # Vulnerability Scanning
     VULN_SCAN_ENABLED: bool = _env("VULN_SCAN_ENABLED", "false").lower() == "true"

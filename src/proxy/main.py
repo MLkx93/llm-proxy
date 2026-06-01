@@ -5,7 +5,7 @@ import asyncio
 import httpx
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from .models import ChatCompletionRequest, ErrorResponse, ErrorDetail
 from .models import AnthropicErrorResponse, AnthropicErrorDetail
@@ -16,6 +16,8 @@ from .rate_limiter import is_allowed
 from src.input_policy import engine as input_policy
 from src.output_security import engine as output_security
 from src.output_security.engine import extract_response_text, extract_response_text_anthropic
+from src.output_security.streaming_scanner import StreamingCodeScanner
+from src.proxy.streaming import stream_openai_response
 import litellm
 from config.settings import settings
 from src.audit import logger as audit
@@ -89,11 +91,10 @@ async def chat_completions(request: Request, body: ChatCompletionRequest):
         audit.emit(request_id=request_id, app_id=app_id, action="BLOCKED", block_code="RATE_LIMITED")
         return _block("RATE_LIMITED", "Too many requests. Please slow down.", request_id, 429)
 
-    # Reject streaming attempts explicitly
     raw = await request.json()
-    if raw.get("stream"):
+    if raw.get("stream") and not settings.STREAMING_ENABLED:
         audit.emit(request_id=request_id, app_id=app_id, action="BLOCKED", block_code="STREAMING_NOT_SUPPORTED")
-        return _block("STREAMING_NOT_SUPPORTED", "Streaming is not supported in v1. Set stream=false.", request_id, 400)
+        return _block("STREAMING_NOT_SUPPORTED", "Streaming is not supported. Set STREAMING_ENABLED=true or use stream=false.", request_id, 400)
 
     messages_raw = [m.model_dump() for m in body.messages]
 
@@ -143,7 +144,27 @@ async def chat_completions(request: Request, body: ChatCompletionRequest):
                 openai_body["temperature"] = body.temperature
             if body.max_tokens is not None:
                 openai_body["max_tokens"] = body.max_tokens
-            
+
+            # --- Streaming branch ---
+            if body.stream and settings.STREAMING_ENABLED:
+                auth_headers = {
+                    "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
+                    "Content-Type": "application/json",
+                }
+                scanner = StreamingCodeScanner()
+                logger.info("streaming_request", extra={"request_id": request_id, "app_id": app_id})
+                return StreamingResponse(
+                    stream_openai_response(
+                        openai_body=openai_body,
+                        url=f"{settings.OPENROUTER_BASE_URL}/chat/completions",
+                        auth_headers=auth_headers,
+                        scanner=scanner,
+                        timeout=LLM_TIMEOUT_S,
+                    ),
+                    media_type="text/event-stream",
+                    headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"},
+                )
+
             async with httpx.AsyncClient(timeout=httpx.Timeout(LLM_TIMEOUT_S)) as client:
                 response = await client.post(
                     f"{settings.OPENROUTER_BASE_URL}/chat/completions",
