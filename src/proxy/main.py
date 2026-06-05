@@ -2,6 +2,7 @@ import uuid
 import time
 import hashlib
 import asyncio
+from typing import Optional
 import httpx
 
 from fastapi import FastAPI, Request
@@ -26,9 +27,50 @@ logger = get_logger("proxy")
 
 app = FastAPI(title="LLM Proxy", version="1.0.0")
 
+# Built-in audit dashboard API (ships with the proxy — see src/proxy/audit_api.py)
+from .audit_api import router as audit_api_router
+app.include_router(audit_api_router)
+
+
+@app.on_event("startup")
+async def _init_audit_db():
+    """Provision the audit DB schema on startup (best-effort; degrades to JSONL)."""
+    try:
+        from src.db.init import init_db
+        await init_db()
+    except Exception:
+        pass
+
 # Timeouts
 LLM_TIMEOUT_S = settings.LLM_TIMEOUT_S
 OUTPUT_CHECK_TIMEOUT_S = 10.0  # max seconds for Nexus validation
+
+
+def _parse_identity(request: Request) -> dict:
+    """
+    Parse the optional X-User-Identity header set by the webui_api gateway.
+    Returns {"user_sub": ..., "user_name": ...} or empty dict. Demo deliverable —
+    lets the audit log attribute events to a real user without coupling the proxy
+    to any identity provider.
+    """
+    import json as _json
+    raw = request.headers.get("X-User-Identity")
+    if not raw:
+        return {}
+    try:
+        data = _json.loads(raw)
+        return {"user_sub": data.get("sub"), "user_name": data.get("name")}
+    except (ValueError, TypeError):
+        return {}
+
+
+def _last_user_text(messages: list[dict]) -> str:
+    """Return the content of the last user message (for the admin display field)."""
+    for m in reversed(messages or []):
+        if m.get("role") == "user":
+            c = m.get("content", "")
+            return c if isinstance(c, str) else str(c)
+    return ""
 
 
 @app.middleware("http")
@@ -84,11 +126,12 @@ async def chat_completions(request: Request, body: ChatCompletionRequest):
 
     app_id = key_entry.app_id
     request.state.app_id = app_id
+    identity = _parse_identity(request)
 
     # --- Rate limiting ---
     if not is_allowed(app_id):
         logger.warning("rate_limited", extra={"request_id": request_id, "app_id": app_id})
-        audit.emit(request_id=request_id, app_id=app_id, action="BLOCKED", block_code="RATE_LIMITED")
+        audit.emit(request_id=request_id, app_id=app_id, action="BLOCKED", block_code="RATE_LIMITED", **identity)
         return _block("RATE_LIMITED", "Too many requests. Please slow down.", request_id, 429)
 
     raw = await request.json()
@@ -121,6 +164,9 @@ async def chat_completions(request: Request, body: ChatCompletionRequest):
             latency_ms=_elapsed(start),
             findings=policy.findings,
             redaction_details=redaction_details,
+            sanitized_prompt=_last_user_text(sanitized_messages),
+            block_reason=policy.block_reason,
+            **identity,
         )
         return _block(policy.block_code, policy.block_reason, request_id, 400)
 
@@ -243,6 +289,11 @@ async def chat_completions(request: Request, body: ChatCompletionRequest):
             messages=messages_raw, model=body.model,
             block_code=output_policy.block_code,
             latency_ms=_elapsed(start),
+            sanitized_prompt=_last_user_text(sanitized_messages),
+            llm_output=extract_response_text(response_dict),
+            block_reason=output_policy.block_reason,
+            safe_version=_extract_safe_version(output_policy.block_reason),
+            **identity,
         )
         return _block(output_policy.block_code, output_policy.block_reason, request_id, 400)
 
@@ -268,6 +319,9 @@ async def chat_completions(request: Request, body: ChatCompletionRequest):
         latency_ms=latency_ms,
         findings=policy.findings if policy.findings else None,
         redaction_details=redaction_details,
+        sanitized_prompt=_last_user_text(sanitized_messages),
+        llm_output=extract_response_text(response_dict),
+        **identity,
     )
 
     return JSONResponse(content=response_dict)
@@ -275,6 +329,15 @@ async def chat_completions(request: Request, body: ChatCompletionRequest):
 
 def _elapsed(start: float) -> int:
     return round((time.monotonic() - start) * 1000)
+
+
+def _extract_safe_version(reason: str) -> Optional[str]:
+    """Pull the suggested safe version out of a block reason like '... use >=2.3.1 instead'."""
+    import re
+    if not reason:
+        return None
+    m = re.search(r">=\s*([\w.]+)", reason)
+    return m.group(1) if m else None
 
 
 def _block(code: str, message: str, request_id: str, status: int = 400) -> JSONResponse:
@@ -480,11 +543,12 @@ async def anthropic_messages(request: Request, body: AnthropicMessageRequest):
     # Derive an app_id from the key for rate limiting and audit (hash to avoid logging raw keys)
     app_id = f"key-{hashlib.sha256(user_api_key.encode()).hexdigest()[:12]}"
     request.state.app_id = app_id
+    identity = _parse_identity(request)
 
     # --- Rate limiting ---
     if not is_allowed(app_id):
         logger.warning("rate_limited", extra={"request_id": request_id, "app_id": app_id})
-        audit.emit(request_id=request_id, app_id=app_id, action="BLOCKED", block_code="RATE_LIMITED")
+        audit.emit(request_id=request_id, app_id=app_id, action="BLOCKED", block_code="RATE_LIMITED", **identity)
         return _anthropic_block("RATE_LIMITED", "Too many requests. Please slow down.", 429)
 
     # --- Parse body ---
@@ -661,3 +725,27 @@ async def anthropic_messages(request: Request, body: AnthropicMessageRequest):
     )
 
     return JSONResponse(content=response_dict)
+
+
+# ---------------------------------------------------------------------------
+# Admin dashboard (static SPA) — served by the proxy itself at /admin
+# ---------------------------------------------------------------------------
+# The proxy ships its own admin console. Built from the React app with
+# REACT_APP_AUTH_MODE=keycloak into src/webui-react/build (or a dedicated
+# admin build dir). Mounted LAST so it never shadows the API routes above.
+from pathlib import Path as _Path
+from fastapi.staticfiles import StaticFiles as _StaticFiles
+from fastapi.responses import FileResponse as _FileResponse
+
+_ADMIN_BUILD = _Path(__file__).parent.parent / "webui-react" / "build"
+if _ADMIN_BUILD.exists():
+    app.mount("/admin/static", _StaticFiles(directory=_ADMIN_BUILD / "static"), name="admin-static")
+
+    @app.get("/admin")
+    @app.get("/admin/{full_path:path}")
+    async def serve_admin(full_path: str = ""):
+        """Serve the admin SPA; non-file routes fall through to index.html."""
+        candidate = _ADMIN_BUILD / full_path
+        if full_path and candidate.exists() and candidate.is_file():
+            return _FileResponse(candidate)
+        return _FileResponse(_ADMIN_BUILD / "index.html")

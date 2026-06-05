@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Overview - Shield AI</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,900&amp;family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-error-container": "#9b1c1c",
+                        "tertiary-container": "#40c0ee",
+                        "surface-container": "#f8eef8",
+                        "on-tertiary-fixed": "#001a33",
+                        "on-surface": "#2e1a28",
+                        "surface-container-low": "#fbf2fb",
+                        "surface-bright": "#fef7ff",
+                        "inverse-surface": "#2e1a28",
+                        "tertiary-fixed": "#c8eaff",
+                        "secondary-container": "#eedcff",
+                        "on-secondary-container": "#2e2040",
+                        "tertiary-fixed-dim": "#80d0f0",
+                        "inverse-primary": "#f0a0cc",
+                        "surface": "#fef7ff",
+                        "error": "#e53e3e",
+                        "inverse-on-surface": "#fef7ff",
+                        "surface-container-highest": "#ece2ec",
+                        "on-primary-fixed-variant": "#a02070",
+                        "background": "#fef7ff",
+                        "tertiary": "#0096cc",
+                        "primary-container": "#f080c0",
+                        "on-primary-container": "#2e1a28",
+                        "surface-dim": "#e0d6e0",
+                        "on-tertiary": "#ffffff",
+                        "on-error": "#ffffff",
+                        "secondary": "#7c52aa",
+                        "error-container": "#ffe8e8",
+                        "surface-container-high": "#f2e8f2",
+                        "secondary-fixed-dim": "#c8a8e8",
+                        "on-secondary-fixed-variant": "#4a3068",
+                        "outline-variant": "#dcc8e0",
+                        "secondary-fixed": "#eedcff",
+                        "surface-variant": "#f2e8f2",
+                        "primary-fixed-dim": "#f0a0cc",
+                        "surface-tint": "#e040a0",
+                        "on-secondary-fixed": "#1a1030",
+                        "on-secondary": "#ffffff",
+                        "on-primary": "#ffffff",
+                        "primary-fixed": "#ffd6ee",
+                        "on-surface-variant": "#604868",
+                        "on-primary-fixed": "#3d0028",
+                        "surface-container-lowest": "#ffffff",
+                        "on-background": "#2e1a28",
+                        "on-tertiary-container": "#00334d",
+                        "primary": "#e040a0",
+                        "on-tertiary-fixed-variant": "#005580",
+                        "outline": "#907898"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "1rem",
+                        "lg": "2rem",
+                        "xl": "3rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["DM Sans", "sans-serif"],
+                        "display": ["DM Sans", "sans-serif"],
+                        "body": ["DM Sans", "sans-serif"],
+                        "label": ["DM Sans", "sans-serif"],
+                        "mono": ["Space Mono", "monospace"]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'DM Sans', sans-serif; }
+        .font-mono { font-family: 'Space Mono', monospace; }
+        
+        /* Playful Microinteractions */
+        .bouncy-hover {
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.3s ease-out;
+        }
+        .bouncy-hover:hover {
+            transform: scale(1.02);
+        }
+        
+        /* Pill/Rounded shaping overrides */
+        .rounded-card { border-radius: 1.5rem; }
+        .rounded-pill { border-radius: 9999px; }
+        
+        /* Colorful Shadows */
+        .shadow-primary-tint { box-shadow: 0 4px 16px rgba(224, 64, 160, 0.15); }
+        .shadow-primary-tint:hover { box-shadow: 0 8px 24px rgba(224, 64, 160, 0.25); }
+        
+        .shadow-secondary-tint { box-shadow: 0 4px 16px rgba(124, 82, 170, 0.15); }
+        .shadow-secondary-tint:hover { box-shadow: 0 8px 24px rgba(124, 82, 170, 0.25); }
+        
+        .shadow-error-tint { box-shadow: 0 4px 16px rgba(229, 62, 62, 0.15); }
+        .shadow-error-tint:hover { box-shadow: 0 8px 24px rgba(229, 62, 62, 0.25); }
+        
+        /* Hide scrollbar for clean look */
+        ::-webkit-scrollbar { width: 0px; background: transparent; }
+    </style>
+</head>
+<body class="bg-background text-on-background antialiased selection:bg-primary-fixed selection:text-on-primary-fixed">
+<!-- TopNavBar -->
+<nav class="fixed top-0 right-0 left-64 flex justify-between items-center px-6 py-3 z-30 bg-surface border-b border-outline-variant transition-colors">
+<div class="flex items-center gap-4">
+<span class="text-lg font-headline font-bold text-on-surface">Shield AI</span>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-4 bg-surface-container-low p-1 rounded-pill">
+<button class="text-on-surface-variant hover:text-primary transition-colors px-4 py-1.5 rounded-pill text-label-md font-medium">Last 1h</button>
+<button class="bg-primary text-on-primary font-bold px-4 py-1.5 rounded-pill shadow-primary-tint text-label-md transition-all hover:scale-105 active:scale-95">Last 24h</button>
+<button class="text-on-surface-variant hover:text-primary transition-colors px-4 py-1.5 rounded-pill text-label-md font-medium">Last 7d</button>
+</div>
+<div class="flex items-center gap-3">
+<button class="text-on-surface-variant hover:text-primary transition-colors p-2 rounded-full hover:bg-surface-container bouncy-hover">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">filter_list</span>
+</button>
+<button class="text-on-surface-variant hover:text-primary transition-colors p-2 rounded-full hover:bg-surface-container bouncy-hover">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">settings</span>
+</button>
+<button class="bg-secondary-container text-on-secondary-container font-bold px-5 py-2 rounded-pill shadow-sm hover:scale-105 active:scale-95 transition-all text-sm flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">refresh</span>
+                    Auto-refresh
+                </button>
+</div>
+</div>
+</nav>
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-0 h-screen flex flex-col p-4 z-40 bg-surface-dim docked left-0 h-full w-64 shadow-sm border-r border-outline-variant/30">
+<div class="flex items-center gap-3 mb-8 px-2 mt-2">
+<div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-on-primary font-bold text-xl shadow-primary-tint">
+                S
+            </div>
+<div>
+<h1 class="text-xl font-headline font-black text-primary tracking-tight">Shield AI</h1>
+<p class="text-xs text-on-surface-variant font-medium">LLM Security Proxy</p>
+</div>
+</div>
+<nav class="flex flex-col gap-2 flex-1 mt-4">
+<a class="flex items-center gap-3 px-4 py-3 bg-primary-container text-on-primary-container rounded-full font-body text-label-sm font-bold shadow-primary-tint hover:scale-105 transition-transform duration-200 ease-out active:scale-95" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">dashboard</span>
+                Overview
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-primary hover:bg-surface rounded-full font-body text-label-sm font-medium hover:scale-105 transition-all duration-200 ease-out active:scale-95" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">list_alt</span>
+                Audit Log
+            </a>
+</nav>
+<div class="mt-auto flex items-center gap-3 px-4 py-3 bg-surface-container-low rounded-card border border-outline-variant/50">
+<div class="w-8 h-8 rounded-full bg-tertiary-container text-on-tertiary-container flex items-center justify-center font-bold text-xs">
+                SA
+            </div>
+<div class="flex flex-col">
+<span class="text-sm font-bold text-on-surface">System Admin</span>
+<span class="text-xs text-on-surface-variant">Admin</span>
+</div>
+</div>
+</aside>
+<!-- Main Content -->
+<main class="ml-64 pt-20 p-8 min-h-screen">
+<div class="max-w-7xl mx-auto space-y-8">
+<!-- Page Header -->
+<div class="flex justify-between items-end">
+<div>
+<h2 class="text-3xl font-headline font-black text-on-surface tracking-tight">Security Overview</h2>
+<p class="text-on-surface-variant mt-1 text-sm font-medium">Real-time analysis of LLM proxy traffic and interventions.</p>
+</div>
+<div class="flex items-center gap-2 text-sm font-mono text-on-surface-variant bg-surface-container px-4 py-2 rounded-pill">
+<span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                    System Active
+                </div>
+</div>
+<!-- Stats Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+<!-- Stat Card 1 -->
+<div class="bg-surface rounded-card p-5 border border-outline-variant/50 shadow-sm bouncy-hover flex flex-col justify-between">
+<div class="flex justify-between items-start mb-4">
+<span class="text-on-surface-variant text-sm font-bold uppercase tracking-wider">Total Requests</span>
+<span class="material-symbols-outlined text-tertiary">swap_horiz</span>
+</div>
+<div>
+<span class="text-3xl font-mono font-bold text-on-surface">1.2M</span>
+<div class="flex items-center gap-1 mt-2 text-xs font-bold text-tertiary">
+<span class="material-symbols-outlined text-xs">trending_up</span>
+                            +12% vs yesterday
+                        </div>
+</div>
+</div>
+<!-- Stat Card 2 -->
+<div class="bg-error-container rounded-card p-5 border border-error/20 shadow-error-tint bouncy-hover flex flex-col justify-between">
+<div class="flex justify-between items-start mb-4">
+<span class="text-on-error-container text-sm font-bold uppercase tracking-wider">Blocked</span>
+<span class="material-symbols-outlined text-error">block</span>
+</div>
+<div>
+<span class="text-3xl font-mono font-bold text-error">4.2k</span>
+<div class="flex items-center gap-1 mt-2 text-xs font-bold text-error">
+<span class="material-symbols-outlined text-xs">trending_up</span>
+                            +3.1% spike
+                        </div>
+</div>
+</div>
+<!-- Stat Card 3 -->
+<div class="bg-secondary-container rounded-card p-5 border border-secondary/20 shadow-secondary-tint bouncy-hover flex flex-col justify-between">
+<div class="flex justify-between items-start mb-4">
+<span class="text-on-secondary-container text-sm font-bold uppercase tracking-wider">Secrets Detected</span>
+<span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 1;">lock</span>
+</div>
+<div>
+<span class="text-3xl font-mono font-bold text-secondary">842</span>
+<div class="flex items-center gap-1 mt-2 text-xs font-bold text-secondary">
+<span class="material-symbols-outlined text-xs">trending_down</span>
+                            -5% vs yesterday
+                        </div>
+</div>
+</div>
+<!-- Stat Card 4 -->
+<div class="bg-primary-fixed rounded-card p-5 border border-primary/20 shadow-primary-tint bouncy-hover flex flex-col justify-between">
+<div class="flex justify-between items-start mb-4">
+<span class="text-on-primary-fixed text-sm font-bold uppercase tracking-wider">PII Redacted</span>
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">shield_person</span>
+</div>
+<div>
+<span class="text-3xl font-mono font-bold text-primary">12.5k</span>
+<div class="flex items-center gap-1 mt-2 text-xs font-bold text-primary">
+<span class="material-symbols-outlined text-xs">horizontal_rule</span>
+                            Stable
+                        </div>
+</div>
+</div>
+<!-- Stat Card 5 -->
+<div class="bg-surface rounded-card p-5 border border-outline-variant/50 shadow-sm bouncy-hover flex flex-col justify-between">
+<div class="flex justify-between items-start mb-4">
+<span class="text-on-surface-variant text-sm font-bold uppercase tracking-wider">Avg. Latency</span>
+<span class="material-symbols-outlined text-tertiary">speed</span>
+</div>
+<div>
+<span class="text-3xl font-mono font-bold text-on-surface">245<span class="text-lg text-on-surface-variant">ms</span></span>
+<div class="flex items-center gap-1 mt-2 text-xs font-bold text-tertiary">
+<span class="material-symbols-outlined text-xs">check_circle</span>
+                            Within SLA
+                        </div>
+</div>
+</div>
+</div>
+<!-- Charts Bento Grid -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+<!-- Main Line Chart: Requests over Time -->
+<div class="lg:col-span-2 bg-surface rounded-card p-6 border border-outline-variant/50 shadow-sm bouncy-hover flex flex-col">
+<div class="flex justify-between items-center mb-6">
+<h3 class="text-lg font-bold text-on-surface">Traffic Flow</h3>
+<button class="p-2 rounded-full hover:bg-surface-container text-on-surface-variant transition-colors">
+<span class="material-symbols-outlined text-sm">more_horiz</span>
+</button>
+</div>
+<!-- Faux Line Chart Visualization -->
+<div class="flex-1 relative min-h-[250px] w-full flex items-end justify-between px-2 pb-6">
+<!-- Y-axis labels -->
+<div class="absolute left-0 top-0 bottom-6 flex flex-col justify-between text-xs font-mono text-on-surface-variant/50">
+<span>100k</span>
+<span>50k</span>
+<span>0</span>
+</div>
+<!-- Grid lines -->
+<div class="absolute left-8 right-0 top-0 bottom-6 flex flex-col justify-between pointer-events-none">
+<div class="w-full border-t border-outline-variant/30 h-0"></div>
+<div class="w-full border-t border-outline-variant/30 h-0"></div>
+<div class="w-full border-t border-outline-variant/30 h-0"></div>
+</div>
+<!-- Graph Area (Abstracted with CSS) -->
+<div class="absolute left-8 right-0 top-0 bottom-6 overflow-hidden rounded-lg">
+<!-- Allowed Line (Tertiary color for 'joyful pop' instead of standard green) -->
+<svg class="w-full h-full" preserveaspectratio="none" viewbox="0 0 100 100">
+<path d="M0,80 Q10,70 20,75 T40,60 T60,50 T80,45 T100,20" fill="none" stroke="#0096cc" stroke-width="3" vector-effect="non-scaling-stroke"></path>
+<path d="M0,80 Q10,70 20,75 T40,60 T60,50 T80,45 T100,20 L100,100 L0,100 Z" fill="url(#gradAllowed)" opacity="0.2"></path>
+</svg>
+<!-- Blocked Line (Error color) -->
+<svg class="absolute inset-0 w-full h-full" preserveaspectratio="none" viewbox="0 0 100 100">
+<path d="M0,95 Q10,92 20,94 T40,85 T60,90 T80,88 T100,70" fill="none" stroke="#e53e3e" stroke-width="2" vector-effect="non-scaling-stroke"></path>
+</svg>
+<defs>
+<lineargradient id="gradAllowed" x1="0%" x2="0%" y1="0%" y2="100%">
+<stop offset="0%" stop-color="#0096cc" stop-opacity="1"></stop>
+<stop offset="100%" stop-color="#0096cc" stop-opacity="0"></stop>
+</lineargradient>
+</defs>
+</div>
+<!-- X-axis labels -->
+<div class="absolute left-8 right-0 bottom-0 flex justify-between text-xs font-mono text-on-surface-variant/50 pt-2 border-t border-outline-variant">
+<span>00:00</span>
+<span>06:00</span>
+<span>12:00</span>
+<span>18:00</span>
+<span>Now</span>
+</div>
+</div>
+<div class="flex justify-center gap-6 mt-4">
+<div class="flex items-center gap-2">
+<span class="w-3 h-3 rounded-full bg-tertiary"></span>
+<span class="text-sm font-bold text-on-surface-variant">Allowed</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="w-3 h-3 rounded-full bg-error"></span>
+<span class="text-sm font-bold text-on-surface-variant">Blocked</span>
+</div>
+</div>
+</div>
+<!-- Donut Chart: Block Reasons -->
+<div class="bg-surface rounded-card p-6 border border-outline-variant/50 shadow-sm bouncy-hover flex flex-col">
+<h3 class="text-lg font-bold text-on-surface mb-6">Intervention Reasons</h3>
+<div class="flex-1 flex flex-col items-center justify-center relative min-h-[200px]">
+<!-- CSS Donut Chart Faux -->
+<div class="relative w-48 h-48 rounded-full flex items-center justify-center shadow-inner" style="background: conic-gradient(#e53e3e 0% 35%, #7c52aa 35% 60%, #e040a0 60% 80%, #0096cc 80% 95%, #e0d6e0 95% 100%);">
+<div class="w-32 h-32 bg-surface rounded-full flex items-center justify-center shadow-lg flex-col">
+<span class="text-2xl font-mono font-bold text-on-surface">4.2k</span>
+<span class="text-xs font-bold text-on-surface-variant uppercase tracking-widest">Total</span>
+</div>
+</div>
+</div>
+<div class="mt-6 space-y-3">
+<div class="flex justify-between items-center text-sm">
+<div class="flex items-center gap-2">
+<span class="w-3 h-3 rounded-full bg-error"></span>
+<span class="font-bold text-on-surface">Malicious Prompt</span>
+</div>
+<span class="font-mono text-on-surface-variant">35%</span>
+</div>
+<div class="flex justify-between items-center text-sm">
+<div class="flex items-center gap-2">
+<span class="w-3 h-3 rounded-full bg-secondary"></span>
+<span class="font-bold text-on-surface">Secret Detected</span>
+</div>
+<span class="font-mono text-on-surface-variant">25%</span>
+</div>
+<div class="flex justify-between items-center text-sm">
+<div class="flex items-center gap-2">
+<span class="w-3 h-3 rounded-full bg-primary"></span>
+<span class="font-bold text-on-surface">PII Violation</span>
+</div>
+<span class="font-mono text-on-surface-variant">20%</span>
+</div>
+<div class="flex justify-between items-center text-sm">
+<div class="flex items-center gap-2">
+<span class="w-3 h-3 rounded-full bg-tertiary"></span>
+<span class="font-bold text-on-surface">Rate Limited</span>
+</div>
+<span class="font-mono text-on-surface-variant">15%</span>
+</div>
+</div>
+</div>
+<!-- Horizontal Bar Chart: Top Finding Types -->
+<div class="lg:col-span-3 bg-surface rounded-card p-6 border border-outline-variant/50 shadow-sm bouncy-hover">
+<h3 class="text-lg font-bold text-on-surface mb-6">Top Data Entities Redacted</h3>
+<div class="space-y-5">
+<!-- Bar 1 -->
+<div>
+<div class="flex justify-between text-sm mb-2">
+<span class="font-bold text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-sm text-tertiary">mail</span>
+                                    EMAIL_ADDRESS
+                                </span>
+<span class="font-mono font-bold text-tertiary">4,231</span>
+</div>
+<div class="w-full bg-surface-container rounded-full h-3 overflow-hidden">
+<div class="bg-tertiary h-3 rounded-full" style="width: 85%"></div>
+</div>
+</div>
+<!-- Bar 2 -->
+<div>
+<div class="flex justify-between text-sm mb-2">
+<span class="font-bold text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-sm text-secondary">key</span>
+                                    API_KEY
+                                </span>
+<span class="font-mono font-bold text-secondary">2,845</span>
+</div>
+<div class="w-full bg-surface-container rounded-full h-3 overflow-hidden">
+<div class="bg-secondary h-3 rounded-full" style="width: 65%"></div>
+</div>
+</div>
+<!-- Bar 3 -->
+<div>
+<div class="flex justify-between text-sm mb-2">
+<span class="font-bold text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-sm text-primary">person</span>
+                                    PERSON_NAME
+                                </span>
+<span class="font-mono font-bold text-primary">1,920</span>
+</div>
+<div class="w-full bg-surface-container rounded-full h-3 overflow-hidden">
+<div class="bg-primary h-3 rounded-full" style="width: 45%"></div>
+</div>
+</div>
+<!-- Bar 4 -->
+<div>
+<div class="flex justify-between text-sm mb-2">
+<span class="font-bold text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-sm text-on-primary-fixed-variant">credit_card</span>
+                                    CREDIT_CARD
+                                </span>
+<span class="font-mono font-bold text-on-primary-fixed-variant">842</span>
+</div>
+<div class="w-full bg-surface-container rounded-full h-3 overflow-hidden">
+<div class="bg-on-primary-fixed-variant h-3 rounded-full" style="width: 25%"></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>

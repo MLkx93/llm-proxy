@@ -17,6 +17,9 @@ from fastapi.staticfiles import StaticFiles
 from .routes.providers import router as providers_router
 from .routes.chat import router as chat_router
 from .routes.dashboard import router as dashboard_router
+from .routes.auth import router as auth_router
+from .routes.audit import router as audit_router
+from .routes.history import router as history_router
 
 # ── App Setup ────────────────────────────────────────────────────────────────
 
@@ -47,6 +50,18 @@ app.add_middleware(
 app.include_router(providers_router)
 app.include_router(chat_router)
 app.include_router(dashboard_router)
+app.include_router(auth_router)
+app.include_router(audit_router)
+app.include_router(history_router)
+
+
+# ── Database init on startup (best-effort) ───────────────────────────────────
+
+@app.on_event("startup")
+async def _startup_db():
+    """Create tables if the DB is reachable. Demo degrades gracefully if not."""
+    from src.db.init import init_db
+    await init_db()
 
 
 # ── Health Check ─────────────────────────────────────────────────────────────

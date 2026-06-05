@@ -1,0 +1,162 @@
+/* Chat — layout with history sidebar + main chat + rich block cards */
+
+.chat-layout {
+  display: flex;
+  gap: 16px;
+  max-width: 1200px;
+  margin: 0 auto;
+  align-items: flex-start;
+}
+
+/* ── History sidebar ─────────────────────────────────────────────────────── */
+.chat-history {
+  width: 240px;
+  min-width: 240px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  position: sticky;
+  top: 16px;
+}
+.new-chat-btn {
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  background: rgba(99, 102, 241, 0.12);
+  color: #a5b4fc;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.new-chat-btn:hover { background: rgba(99, 102, 241, 0.22); }
+.conv-list { display: flex; flex-direction: column; gap: 4px; overflow-y: auto; max-height: 60vh; }
+.conv-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 10px; border-radius: 8px; cursor: pointer;
+  color: #94a3b8; font-size: 0.85rem; transition: all 0.15s;
+}
+.conv-item:hover { background: rgba(255, 255, 255, 0.04); color: #e2e8f0; }
+.conv-item.active { background: rgba(99, 102, 241, 0.15); color: #e2e8f0; }
+.conv-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.conv-del {
+  border: none; background: none; color: #64748b; cursor: pointer;
+  font-size: 1.1rem; line-height: 1; padding: 0 4px; opacity: 0;
+}
+.conv-item:hover .conv-del { opacity: 1; }
+.conv-del:hover { color: #ef4444; }
+.conv-empty { color: #64748b; font-size: 0.8rem; text-align: center; padding: 16px 8px; }
+
+/* ── Main chat ───────────────────────────────────────────────────────────── */
+.chat-main { flex: 1; min-width: 0; }
+
+.chat-toolbar {
+  display: flex; align-items: center; gap: 16px;
+  padding: 10px 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.selected-model-badge {
+  background: rgba(16, 185, 129, 0.15); color: #6ee7b7;
+  padding: 4px 12px; border-radius: 9999px; font-size: 0.8rem; font-weight: 600;
+}
+.stream-toggle {
+  display: flex; align-items: center; gap: 6px;
+  color: #94a3b8; font-size: 0.85rem; cursor: pointer; margin-left: auto;
+}
+.demo-client-tag {
+  background: rgba(148, 163, 184, 0.15); color: #94a3b8;
+  padding: 4px 10px; border-radius: 9999px; font-size: 0.72rem;
+  font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+}
+
+.chat-container {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  margin-top: 12px;
+  display: flex; flex-direction: column;
+  height: 65vh;
+}
+.chat-messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+.chat-empty { margin: auto; text-align: center; color: #94a3b8; }
+.empty-icon { font-size: 3rem; margin-bottom: 12px; }
+.empty-hint { font-size: 0.85rem; color: #64748b; margin-top: 6px; }
+
+.chat-message { display: flex; gap: 12px; }
+.chat-message.user { flex-direction: row-reverse; }
+.message-avatar { font-size: 1.5rem; flex-shrink: 0; }
+.message-content { max-width: 75%; }
+.message-text {
+  padding: 12px 16px; border-radius: 14px; white-space: pre-wrap;
+  line-height: 1.5; word-break: break-word;
+}
+.chat-message.user .message-text { background: rgba(99, 102, 241, 0.2); color: #e2e8f0; }
+.chat-message.assistant .message-text { background: rgba(255, 255, 255, 0.05); color: #e2e8f0; }
+.cursor { animation: blink 1s steps(2) infinite; color: #6ee7b7; }
+@keyframes blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
+
+.typing-indicator { display: flex; gap: 4px; padding: 14px 16px; }
+.typing-indicator span {
+  width: 8px; height: 8px; border-radius: 50%; background: #64748b;
+  animation: typing 1.4s infinite;
+}
+.typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+.typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes typing { 0%, 60%, 100% { opacity: 0.3; } 30% { opacity: 1; } }
+
+.chat-input-area { padding: 16px; border-top: 1px solid rgba(255, 255, 255, 0.06); }
+.chat-input {
+  width: 100%; background: rgba(0, 0, 0, 0.2); border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px; padding: 12px; color: #e2e8f0; font-family: inherit; font-size: 0.95rem;
+  resize: none; outline: none;
+}
+.chat-input:focus { border-color: rgba(99, 102, 241, 0.5); }
+.input-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px; }
+.btn { padding: 10px 20px; border-radius: 10px; font-weight: 600; cursor: pointer; border: none; transition: all 0.2s; }
+.btn-primary { background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #fff; }
+.btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-secondary { background: rgba(255, 255, 255, 0.06); color: #94a3b8; }
+.btn-secondary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── Block card (the security "wow") ─────────────────────────────────────── */
+.block-card {
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.08), rgba(239, 68, 68, 0.03));
+  border-radius: 14px; padding: 16px; max-width: 80%;
+}
+.block-card-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.block-card-icon { font-size: 1.8rem; }
+.block-card-title { font-weight: 700; color: #fca5a5; font-size: 1rem; }
+.block-card-code {
+  font-family: ui-monospace, monospace; font-size: 0.7rem; color: #ef4444;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.block-card-desc { color: #e2e8f0; font-size: 0.9rem; margin-bottom: 10px; }
+.block-card-reason {
+  background: rgba(0, 0, 0, 0.25); border-radius: 8px; padding: 10px 12px;
+  font-family: ui-monospace, monospace; font-size: 0.8rem; color: #fcd34d;
+  margin-bottom: 10px; word-break: break-word;
+}
+.block-card-safe {
+  background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: 8px; padding: 10px 12px; color: #6ee7b7; font-weight: 600;
+  font-size: 0.85rem; margin-bottom: 10px;
+}
+.block-card-safe code { background: rgba(0, 0, 0, 0.3); padding: 2px 6px; border-radius: 4px; }
+.block-card-partial { margin-bottom: 10px; }
+.block-card-partial summary { cursor: pointer; color: #94a3b8; font-size: 0.8rem; }
+.block-card-partial pre {
+  background: rgba(0, 0, 0, 0.35); border-radius: 8px; padding: 10px;
+  font-size: 0.75rem; color: #cbd5e1; overflow-x: auto; margin-top: 8px;
+}
+.block-card-note { font-size: 0.75rem; color: #6ee7b7; font-style: italic; }
+
+/* System/network errors — neutral amber, not a scary red security block */
+.block-card-system {
+  border-color: rgba(245, 158, 11, 0.4);
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(245, 158, 11, 0.03));
+}
+.block-card-system .block-card-title { color: #fcd34d; }
+.block-card-system .block-card-code { color: #f59e0b; }
