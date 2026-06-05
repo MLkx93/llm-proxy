@@ -1,30 +1,36 @@
 #!/usr/bin/env bash
 set -e
 
-# Activate virtual environment
-source "$(dirname "$0")/../.venv/bin/activate"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$SCRIPT_DIR/.."
 
-# Create logs directory if not exists
-mkdir -p "$(dirname "$0")/../logs"
+source "$ROOT/.venv/bin/activate"
 
-# Start proxy server in background
-nohup uvicorn src.proxy.main:app --host 0.0.0.0 --port 8080 --reload > "$(dirname "$0")/../logs/proxy.log" 2>&1 &
+mkdir -p "$ROOT/logs"
+
+# Kill any existing instances
+pkill -f "uvicorn src.proxy.main" 2>/dev/null || true
+pkill -f "uvicorn src.webui_api.main" 2>/dev/null || true
+sleep 1
+
+# Start proxy server (port 8080)
+nohup uvicorn src.proxy.main:app --host 0.0.0.0 --port 8080 \
+    > "$ROOT/logs/proxy.log" 2>&1 &
 PROXY_PID=$!
+echo "🔒 Proxy started (PID $PROXY_PID) → http://localhost:8080"
 
-# Start API server in background
-nohup uvicorn src.webui_api.main:app --host 0.0.0.0 --port 8000 --reload > "$(dirname "$0")/../logs/api.log" 2>&1 &
+# Start API server (port 8000)
+nohup uvicorn src.webui_api.main:app --host 0.0.0.0 --port 8000 \
+    > "$ROOT/logs/api.log" 2>&1 &
 API_PID=$!
+echo "🌐 API started   (PID $API_PID) → http://localhost:8000"
 
-echo "✅ Proxy and API servers started. Open a new terminal and run:"
+# Save PIDs so they can be killed later
+echo "$PROXY_PID" > "$ROOT/logs/proxy.pid"
+echo "$API_PID"   > "$ROOT/logs/api.pid"
+
+echo ""
+echo "✅ Both servers running. Start the React frontend with:"
 echo "   cd src/webui-react && npm start"
-
-# Trap to clean up background jobs on script exit
-cleanup() {
-    echo "Shutting down background processes..."
-    kill $PROXY_PID $API_PID 2>/dev/null || true
-    wait $PROXY_PID $API_PID 2>/dev/null || true
-    echo "Done."
-}
-trap cleanup EXIT
-
-exit 0
+echo ""
+echo "To stop: bash scripts/stop.sh"
