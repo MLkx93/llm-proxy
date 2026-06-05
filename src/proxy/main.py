@@ -114,6 +114,9 @@ async def chat_completions(request: Request, body: ChatCompletionRequest):
             "block_code": policy.block_code,
             "findings": policy.findings,
         })
+        # For blocked requests, log a redacted version of the prompt to prevent secret leakage
+        last_msg = _extract_last_user_text(messages_raw)
+        redacted_prompt = _redact_secrets(last_msg)
         audit.emit(
             request_id=request_id, app_id=app_id, action="BLOCKED",
             messages=sanitized_messages, model=body.model,
@@ -121,6 +124,7 @@ async def chat_completions(request: Request, body: ChatCompletionRequest):
             latency_ms=_elapsed(start),
             findings=policy.findings,
             redaction_details=redaction_details,
+            sanitized_prompt=redacted_prompt,
         )
         return _block(policy.block_code, policy.block_reason, request_id, 400)
 
@@ -307,6 +311,31 @@ def _anthropic_block(code: str, message: str, status: int = 400) -> JSONResponse
             error=AnthropicErrorDetail(type=error_type, message=f"[{code}] {message}")
         ).model_dump(),
     )
+
+
+def _extract_last_user_text(messages: list[dict]) -> str:
+    """Extract text from the last user message in a list of messages."""
+    for m in reversed(messages or []):
+        if m.get("role") == "user":
+            c = m.get("content", "")
+            if isinstance(c, str):
+                return c
+            elif isinstance(c, list):
+                # Claude Code bundles messages as blocks
+                for block in reversed(c):
+                    if isinstance(block, dict) and block.get("type") == "text":
+                        return block.get("text", "")
+    return ""
+
+
+def _redact_secrets(text: str) -> str:
+    """Redact API keys and secrets from text using the input policy engine's patterns."""
+    from src.input_policy.patterns import SECRET_PATTERNS
+
+    redacted = text
+    for pattern in SECRET_PATTERNS:
+        redacted = pattern.pattern.sub("[REDACTED]", redacted)
+    return redacted
 
 
 def _hash_text(text: str) -> str:
@@ -514,12 +543,15 @@ async def anthropic_messages(request: Request, body: AnthropicMessageRequest):
             "block_code": policy.block_code,
             "findings": policy.findings,
         })
+        # For blocked requests, log a redacted version of the prompt to prevent secret leakage
+        redacted_prompt = _redact_secrets(prompt_text)
         audit.emit(
             request_id=request_id, app_id=app_id, action="BLOCKED",
             model=model, block_code=policy.block_code,
             prompt_hash=p_hash, latency_ms=_elapsed(start),
             findings=policy.findings,
             redaction_details=redaction_details,
+            sanitized_prompt=redacted_prompt,
         )
         return _anthropic_block(policy.block_code, policy.block_reason, 400)
 

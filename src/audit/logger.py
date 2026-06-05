@@ -60,8 +60,9 @@ def emit(
     block_code: Optional[str] = None,
     latency_ms: Optional[int] = None,
     prompt_hash: Optional[str] = None,
-    findings: Optional[list[str]] = None,      # NEW: List of detected PII/secrets
-    redaction_details: Optional[dict] = None,  # NEW: Redaction metadata
+    findings: Optional[list[str]] = None,      # List of detected PII/secrets
+    redaction_details: Optional[dict] = None,  # Redaction metadata
+    sanitized_prompt: Optional[str] = None,    # Redacted prompt for display
 ) -> None:
     """
     Write a single audit event. Safe to call from async context —
