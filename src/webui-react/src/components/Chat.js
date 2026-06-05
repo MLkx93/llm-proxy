@@ -25,7 +25,7 @@ const DISPLAY_ONLY = new Set(['block', 'notice']);
 
 function cleanHistory(transcript) {
   return transcript
-    .filter((m) => !DISPLAY_ONLY.has(m.role) && !m.error)
+    .filter((m) => !DISPLAY_ONLY.has(m.role) && !m.error && !m.blocked)
     .map((m) => ({ role: m.role, content: m.content }));
 }
 
@@ -197,9 +197,20 @@ export default function Chat() {
     }
   };
 
-  // Add a block card to the transcript (display-only; excluded from clean history)
+  // Add a block card to the transcript (display-only; excluded from clean history).
+  // Also retroactively marks the preceding user message as blocked so cleanHistory
+  // excludes it — the LLM must never see a message whose turn was blocked.
   const addBlock = (block, convId, partial) => {
-    setTranscript((t) => [...t, { role: 'block', content: block.message, block, partial }]);
+    setTranscript((t) => {
+      const updated = [...t];
+      for (let i = updated.length - 1; i >= 0; i--) {
+        if (updated[i].role === 'user' && !updated[i].blocked) {
+          updated[i] = { ...updated[i], blocked: true };
+          break;
+        }
+      }
+      return [...updated, { role: 'block', content: block.message, block, partial }];
+    });
     persist(convId, {
       role: 'assistant', content: block.message,
       blocked: true, block_code: block.block_code,
