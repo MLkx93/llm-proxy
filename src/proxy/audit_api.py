@@ -16,14 +16,17 @@ authorise chat traffic. No dependency on the demo's login gate.
 from fastapi import APIRouter, Query, HTTPException, Header
 from sqlalchemy import select, func
 from typing import Optional
+import jwt
 
 from .auth import validate
 from .oidc import verify_oidc_token, has_admin_role
+from .logging import get_logger
 from config.settings import settings
 from src.db.session import get_session_factory
 from src.db.models import AuditEvent
 
 router = APIRouter(prefix="/v1/audit", tags=["audit"])
+logger = get_logger("audit_api")
 
 
 def _bearer(authorization: Optional[str]) -> Optional[str]:
@@ -38,8 +41,9 @@ def _require_admin(authorization: Optional[str]):
 
     - OIDC_ENABLED=true  → require a valid Keycloak token bearing the admin role
                            (SSO-only; API keys are NOT accepted for audit data).
-    - OIDC_ENABLED=false → fall back to the proxy API-key registry, so the
-                           dashboard/demo keep working until Keycloak is wired.
+    - OIDC_ENABLED=false → accept either:
+                           (1) a valid JWT from the admin console login, or
+                           (2) a valid proxy API key.
     """
     if settings.OIDC_ENABLED:
         token = _bearer(authorization)
@@ -49,9 +53,29 @@ def _require_admin(authorization: Optional[str]):
         if not has_admin_role(claims):
             raise HTTPException(status_code=403, detail="Admin role required.")
         return
-    # OIDC off → API-key gate
+
+    # OIDC off → try JWT first (for admin console), then API key (for CLI/automation)
+    token = _bearer(authorization)
+    if token:
+        try:
+            # Try to decode as a simple JWT (HS256, issued by /api/auth/login)
+            claims = jwt.decode(token, settings.JWT_SECRET, algorithms=["HS256"])
+            # If we get here, JWT is valid — grant access
+            logger.info("audit_auth_jwt_accepted", extra={"sub": claims.get("sub")})
+            return
+        except jwt.ExpiredSignatureError:
+            logger.warning("audit_auth_jwt_expired")
+            pass
+        except jwt.InvalidTokenError as e:
+            logger.warning("audit_auth_jwt_invalid", extra={"error": str(e)})
+            pass
+        except Exception as jwt_err:
+            logger.warning("audit_auth_jwt_error", extra={"error": str(jwt_err), "type": type(jwt_err).__name__})
+            pass
+
+    # Fall back to API key validation
     if validate(authorization) is None:
-        raise HTTPException(status_code=401, detail="Missing or invalid API key.")
+        raise HTTPException(status_code=401, detail="Missing or invalid API key or token.")
 
 
 def _serialize(e: AuditEvent) -> dict:

@@ -210,7 +210,11 @@ export default function AuditLog() {
     }
   }, [timeRange, statusFilter, blockFilter, search, page]);
 
-  useEffect(() => { fetchLogs(); }, [fetchLogs]);
+  useEffect(() => {
+    fetchLogs();
+    const interval = setInterval(fetchLogs, 5000);
+    return () => clearInterval(interval);
+  }, [fetchLogs]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -224,6 +228,26 @@ export default function AuditLog() {
       searchValue={search} onSearch={v => { setSearch(v); setPage(1); }}
       onRefresh={() => setPage(1)}
     >
+      {/* Warning banner when using mock data */}
+      {usingMock && (
+        <div style={{
+          background: 'var(--sa-error-container)',
+          border: '1px solid rgba(229,62,62,0.3)',
+          borderRadius: '8px',
+          padding: '12px 16px',
+          marginBottom: '16px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          fontSize: '13px',
+          color: 'var(--sa-on-error-container)',
+          fontWeight: '500',
+        }}>
+          <span className="sa-icon" style={{ fontSize: '16px' }}>warning</span>
+          Could not reach the audit API — showing demo data. Check that the proxy is running on port 8080.
+        </div>
+      )}
+
       <div style={{ display: 'flex', gap: 0, height: 'calc(100vh - 120px)', overflow: 'hidden' }}>
         {/* Table section */}
         <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 16 }}>

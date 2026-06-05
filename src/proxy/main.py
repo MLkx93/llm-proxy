@@ -4,6 +4,8 @@ import hashlib
 import asyncio
 from typing import Optional
 import httpx
+import jwt
+from datetime import datetime, timedelta
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -106,6 +108,75 @@ async def ready():
     if issues:
         return JSONResponse(status_code=503, content={"status": "not_ready", "issues": issues})
     return {"status": "ready"}
+
+
+# ---------------------------------------------------------------------------
+# Simple auth for admin console (same-origin, no CORS needed)
+# ---------------------------------------------------------------------------
+
+_ADMIN_ACCOUNTS = {
+    "admin": {"password": "admin", "role": "admin"},
+    "user": {"password": "user", "role": "user"},
+}
+
+@app.post("/api/auth/login")
+async def admin_login(request: Request):
+    """Simple JWT login for the admin console served from /admin."""
+    try:
+        body = await request.json()
+        username = body.get("username", "").strip()
+        password = body.get("password", "").strip()
+
+        account = _ADMIN_ACCOUNTS.get(username)
+        if not account or account["password"] != password:
+            return JSONResponse(status_code=401, content={"detail": "Invalid credentials"})
+
+        # Create a simple HS256 JWT (same as demo)
+        token = jwt.encode(
+            {
+                "sub": username,
+                "name": username,
+                "exp": datetime.utcnow() + timedelta(hours=24),
+            },
+            settings.JWT_SECRET,
+            algorithm="HS256"
+        )
+
+        return {
+            "token": token,
+            "user": {
+                "sub": username,
+                "name": username,
+                "role": account["role"],
+            }
+        }
+    except Exception as e:
+        return JSONResponse(status_code=400, content={"detail": str(e)})
+
+@app.get("/api/auth/me")
+async def admin_me(request: Request):
+    """Check current auth status for the admin console."""
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+
+    token = auth[7:].strip()
+    try:
+        claims = jwt.decode(token, settings.JWT_SECRET, algorithms=["HS256"])
+        username = claims.get("sub")
+        account = _ADMIN_ACCOUNTS.get(username)
+        if not account:
+            return JSONResponse(status_code=401, content={"detail": "Invalid token"})
+
+        return {
+            "sub": username,
+            "name": username,
+            "role": account["role"],
+        }
+    except jwt.ExpiredSignatureError:
+        return JSONResponse(status_code=401, content={"detail": "Token expired"})
+    except jwt.InvalidTokenError:
+        return JSONResponse(status_code=401, content={"detail": "Invalid token"})
 
 
 # ---------------------------------------------------------------------------
@@ -735,17 +806,33 @@ async def anthropic_messages(request: Request, body: AnthropicMessageRequest):
 # admin build dir). Mounted LAST so it never shadows the API routes above.
 from pathlib import Path as _Path
 from fastapi.staticfiles import StaticFiles as _StaticFiles
-from fastapi.responses import FileResponse as _FileResponse
+from fastapi.responses import FileResponse as _FileResponse, HTMLResponse as _HTMLResponse
 
 _ADMIN_BUILD = _Path(__file__).parent.parent / "webui-react" / "build"
+
+@app.get("/admin")
+@app.get("/admin/{full_path:path}")
+async def serve_admin(full_path: str = ""):
+    """Serve the admin SPA with rewritten asset paths."""
+    if not _ADMIN_BUILD.exists():
+        return _FileResponse(status_code=404)
+
+    # Try to serve a specific file (e.g. /admin/favicon.ico)
+    candidate = _ADMIN_BUILD / full_path
+    if full_path and candidate.exists() and candidate.is_file():
+        return _FileResponse(candidate)
+
+    # Serve index.html, rewriting /static/ → /admin/static/
+    index_path = _ADMIN_BUILD / "index.html"
+    if index_path.exists():
+        html = index_path.read_text()
+        # Rewrite asset paths
+        html = html.replace('src="/static/', 'src="/admin/static/')
+        html = html.replace('href="/static/', 'href="/admin/static/')
+        return _HTMLResponse(html, media_type="text/html; charset=utf-8")
+
+    return _FileResponse(_ADMIN_BUILD / "index.html")
+
+# Mount static assets at /admin/static/
 if _ADMIN_BUILD.exists():
     app.mount("/admin/static", _StaticFiles(directory=_ADMIN_BUILD / "static"), name="admin-static")
-
-    @app.get("/admin")
-    @app.get("/admin/{full_path:path}")
-    async def serve_admin(full_path: str = ""):
-        """Serve the admin SPA; non-file routes fall through to index.html."""
-        candidate = _ADMIN_BUILD / full_path
-        if full_path and candidate.exists() and candidate.is_file():
-            return _FileResponse(candidate)
-        return _FileResponse(_ADMIN_BUILD / "index.html")

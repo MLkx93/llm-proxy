@@ -33,11 +33,11 @@ export default function SecurityLayout({ children, timeRange, onTimeRange, onRef
 
         {/* Nav */}
         <nav style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
-          <NavLink to="/security" end className={({ isActive }) => `sa-nav-item ${isActive ? 'active' : ''}`}>
+          <NavLink to="/" end className={({ isActive }) => `sa-nav-item ${isActive ? 'active' : ''}`}>
             <span className="sa-icon sa-icon-filled">dashboard</span>
             Overview
           </NavLink>
-          <NavLink to="/security/audit" className={({ isActive }) => `sa-nav-item ${isActive ? 'active' : ''}`}>
+          <NavLink to="/audit" className={({ isActive }) => `sa-nav-item ${isActive ? 'active' : ''}`}>
             <span className="sa-icon">list_alt</span>
             Audit Log
           </NavLink>

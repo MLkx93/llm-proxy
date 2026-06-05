@@ -1,13 +1,16 @@
 /**
  * API client for the LLM Proxy Web UI.
- * React (3000) → API server (8000) → LLM Security Proxy (8080) → providers.
  *
- * A request interceptor attaches the demo JWT (from localStorage) as a Bearer
- * token so the gateway can identify the user and gate the admin endpoints.
+ * When served from port 8080 (admin console): calls proxy's /api/* directly
+ * When served from port 8000 (demo): calls webui_api gateway at /api/*
  */
 import axios from 'axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+// When on port 8080 (proxy-served admin), use same-origin (current host)
+// When on port 8000 (demo gateway), use gateway's localhost:8000
+const API_BASE_URL = window.location.port === '8080'
+  ? window.location.origin  // same-origin: http://localhost:8080
+  : process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -52,21 +55,23 @@ export const streamChatCompletion = (messages, model) => {
 };
 
 // ── Audit (admin panel) ──────────────────────────────────────────────────────
-// In Keycloak/admin mode the console is served BY the proxy (same origin), so we
-// hit the proxy's own /v1/audit/* directly. In demo mode we go through the
-// gateway's /api/audit/* (which forwards to the proxy).
-const ADMIN_MODE = process.env.REACT_APP_AUTH_MODE === 'keycloak';
-const STATS_PATH = ADMIN_MODE ? '/v1/audit/stats' : '/api/audit/stats';
-const LOGS_PATH = ADMIN_MODE ? '/v1/audit/logs' : '/api/audit/logs';
-// Same-origin when proxy-served; axios baseURL '' means "current origin".
-const auditClient = ADMIN_MODE ? axios.create({ timeout: 30000 }) : api;
-if (ADMIN_MODE) {
-  auditClient.interceptors.request.use((config) => {
-    const token = localStorage.getItem('shield_token');
-    if (token) config.headers.Authorization = `Bearer ${token}`;
-    return config;
-  });
-}
+// When served by the proxy itself (port 8080), use /v1/audit/* directly (same-origin).
+// When served by the demo (port 8000), go through /api/audit/* (which forwards to proxy).
+const isProxyServed = window.location.port === '8080';
+const STATS_PATH = isProxyServed ? '/v1/audit/stats' : '/api/audit/stats';
+const LOGS_PATH = isProxyServed ? '/v1/audit/logs' : '/api/audit/logs';
+
+// Create a dedicated audit client with correct baseURL
+const auditClient = isProxyServed
+  ? axios.create({ baseURL: window.location.origin, timeout: 30000 })  // e.g. http://localhost:8080
+  : api;  // use the normal api client pointing to port 8000
+
+// Always attach JWT token for authorization
+auditClient.interceptors.request.use((config) => {
+  const token = localStorage.getItem('shield_token');
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
 
 export const getAuditStats = (timeRange = '24h') =>
   auditClient.get(STATS_PATH, { params: { time_range: timeRange } });

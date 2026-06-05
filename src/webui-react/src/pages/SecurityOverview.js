@@ -211,12 +211,36 @@ export default function SecurityOverview() {
     }
   }, []);
 
-  useEffect(() => { fetchStats(timeRange); }, [timeRange, fetchStats]);
+  useEffect(() => {
+    fetchStats(timeRange);
+    const interval = setInterval(() => fetchStats(timeRange), 5000);
+    return () => clearInterval(interval);
+  }, [timeRange, fetchStats]);
 
   const filterByRange = (range) => setTimeRange(range);
 
   return (
     <SecurityLayout timeRange={timeRange} onTimeRange={filterByRange} onRefresh={() => filterByRange(timeRange)}>
+      {/* Warning banner when using mock data */}
+      {usingMock && (
+        <div style={{
+          background: 'var(--sa-error-container)',
+          border: '1px solid rgba(229,62,62,0.3)',
+          borderRadius: '8px',
+          padding: '12px 16px',
+          marginBottom: '20px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          fontSize: '13px',
+          color: 'var(--sa-on-error-container)',
+          fontWeight: '500',
+        }}>
+          <span className="sa-icon" style={{ fontSize: '16px' }}>warning</span>
+          Could not reach the audit API — showing demo data. Check that the proxy is running on port 8080.
+        </div>
+      )}
+
       {/* Page header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 32 }}>
         <div>

@@ -1,4 +1,3 @@
-import React from 'react';
 import { BrowserRouter as Router, Routes, Route, NavLink, Navigate, useLocation } from 'react-router-dom';
 import Chat from './components/Chat';
 import Dashboard from './components/Dashboard';
@@ -27,20 +26,28 @@ function RequireAdmin({ children }) {
 
 function AppShell() {
   const location = useLocation();
-  const { user, logout, isAdmin } = useAuth();
+  const { user, logout } = useAuth();
+
+  const isAdminConsole = window.location.port === '8080';
 
   if (location.pathname === '/login') {
     return <Routes><Route path="/login" element={<Login />} /></Routes>;
   }
 
-  // Security panel uses its own full-screen layout (admin-gated)
-  if (location.pathname.startsWith('/security')) {
+  // ADMIN CONSOLE MODE (port 8080): only security pages
+  if (isAdminConsole) {
     return (
       <Routes>
-        <Route path="/security" element={<RequireAdmin><SecurityOverview /></RequireAdmin>} />
-        <Route path="/security/audit" element={<RequireAdmin><AuditLog /></RequireAdmin>} />
+        <Route path="/" element={<RequireAdmin><SecurityOverview /></RequireAdmin>} />
+        <Route path="/audit" element={<RequireAdmin><AuditLog /></RequireAdmin>} />
+        <Route path="/login" element={<Login />} />
       </Routes>
     );
+  }
+
+  // DEMO MODE (port 8000): chat + dashboard, security panel hidden
+  if (location.pathname === '/login') {
+    return <Routes><Route path="/login" element={<Login />} /></Routes>;
   }
 
   return (
@@ -55,11 +62,6 @@ function AppShell() {
           <NavLink to="/dashboard" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
             📊 Dashboard
           </NavLink>
-          {isAdmin && (
-            <NavLink to="/security" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
-              🛡️ Security Panel
-            </NavLink>
-          )}
           {user && (
             <button className="nav-link" onClick={logout} style={{ cursor: 'pointer', background: 'none', border: '1px solid transparent' }}>
               🚪 {user.name} · Logout
@@ -83,8 +85,12 @@ function AppShell() {
 }
 
 function App() {
+  // When served from proxy at /admin, use /admin as basename.
+  // When served from 8000, use / (root).
+  const basename = window.location.port === '8080' ? '/admin' : '/';
+
   return (
-    <Router>
+    <Router basename={basename}>
       <AuthProvider>
         <AppShell />
       </AuthProvider>
