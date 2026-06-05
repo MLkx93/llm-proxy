@@ -62,7 +62,14 @@ def emit(
     prompt_hash: Optional[str] = None,
     findings: Optional[list[str]] = None,      # List of detected PII/secrets
     redaction_details: Optional[dict] = None,  # Redaction metadata
-    sanitized_prompt: Optional[str] = None,    # Redacted prompt for display
+    # Identity (set by webui_api via X-User-Identity header) — demo deliverable
+    user_sub: Optional[str] = None,
+    user_name: Optional[str] = None,
+    # Demo display fields (populated when available) — for the admin drawer
+    sanitized_prompt: Optional[str] = None,
+    llm_output: Optional[str] = None,
+    block_reason: Optional[str] = None,
+    safe_version: Optional[str] = None,
 ) -> None:
     """
     Write a single audit event. Safe to call from async context —
@@ -70,19 +77,19 @@ def emit(
 
     If prompt_hash is provided, it's used directly (for Anthropic-format requests
     where messages are pre-extracted). Otherwise, computed from messages.
-    
-    New parameters:
+
     - findings: List of detected PII/secrets types (e.g., ["EMAIL_ADDRESS", "OPENAI_API_KEY"])
-    - redaction_details: Dictionary with redaction metadata (see below)
-    
+    - redaction_details: Dictionary with redaction metadata
+    - sanitized_prompt: Redacted version of the prompt — secrets replaced with [REDACTED]
+
     Redaction details structure:
     {
-        "redacted": bool,           # True if redaction occurred
-        "pii_types": list[str],     # ["EMAIL_ADDRESS", "PHONE_NUMBER", etc.]
-        "redaction_count": int,     # Number of items redacted
-        "original_hash": str,       # SHA-256 before redaction
-        "sanitized_hash": str,     # SHA-256 after redaction
-        "redaction_method": str,    # "presidio" or "regex"
+        "redacted": bool,
+        "pii_types": list[str],
+        "redaction_count": int,
+        "original_hash": str,
+        "sanitized_hash": str,
+        "redaction_method": str,
     }
     """
     computed_hash = prompt_hash
@@ -99,15 +106,67 @@ def emit(
         "prompt_hash": computed_hash,
         "latency_ms": latency_ms,
     }
-    
-    # Add new fields if provided
+
     if findings:
         event["findings"] = findings
     if redaction_details:
         event["redaction_details"] = redaction_details
-        
+
     try:
         _write(event)
     except OSError as exc:
-        # Never let audit failure crash the proxy — but do log it loudly
         logger.error("audit_write_failed", extra={"error": str(exc)})
+
+    # Best-effort Postgres sink (demo deliverable). Never blocks or crashes the
+    # proxy: scheduled as a fire-and-forget task when an event loop is running,
+    # silently skipped otherwise (e.g. in sync tests).
+    _sink_to_db(
+        event,
+        user_sub=user_sub, user_name=user_name,
+        sanitized_prompt=sanitized_prompt, llm_output=llm_output,
+        block_reason=block_reason, safe_version=safe_version,
+    )
+
+
+def _sink_to_db(event: dict, **extra) -> None:
+    """Schedule an async insert of the audit event into Postgres (best-effort)."""
+    try:
+        import asyncio
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return  # no event loop — skip DB sink (file write already happened)
+
+    async def _insert():
+        try:
+            from datetime import datetime
+            from src.db.session import get_session_factory
+            from src.db.models import AuditEvent
+
+            ts = event.get("timestamp")
+            parsed_ts = datetime.fromisoformat(ts) if isinstance(ts, str) else ts
+
+            factory = get_session_factory()
+            async with factory() as session:
+                session.add(AuditEvent(
+                    timestamp=parsed_ts,
+                    request_id=event.get("request_id"),
+                    app_id=event.get("app_id"),
+                    action=event.get("action"),
+                    block_code=event.get("block_code"),
+                    model=event.get("model"),
+                    prompt_hash=event.get("prompt_hash"),
+                    latency_ms=event.get("latency_ms"),
+                    findings=event.get("findings"),
+                    redaction_details=event.get("redaction_details"),
+                    user_sub=extra.get("user_sub"),
+                    user_name=extra.get("user_name"),
+                    sanitized_prompt=extra.get("sanitized_prompt"),
+                    llm_output=extra.get("llm_output"),
+                    block_reason=extra.get("block_reason"),
+                    safe_version=extra.get("safe_version"),
+                ))
+                await session.commit()
+        except Exception as exc:
+            logger.error("audit_db_sink_failed", extra={"error": str(exc)})
+
+    loop.create_task(_insert())

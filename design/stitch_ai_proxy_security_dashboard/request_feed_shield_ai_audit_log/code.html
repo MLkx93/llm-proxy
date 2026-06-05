@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Request Feed - Shield AI</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-error-container": "#9b1c1c",
+                        "tertiary-container": "#40c0ee",
+                        "surface-container": "#f8eef8",
+                        "on-tertiary-fixed": "#001a33",
+                        "on-surface": "#2e1a28",
+                        "surface-container-low": "#fbf2fb",
+                        "surface-bright": "#fef7ff",
+                        "inverse-surface": "#2e1a28",
+                        "tertiary-fixed": "#c8eaff",
+                        "secondary-container": "#eedcff",
+                        "on-secondary-container": "#2e2040",
+                        "tertiary-fixed-dim": "#80d0f0",
+                        "inverse-primary": "#f0a0cc",
+                        "surface": "#fef7ff",
+                        "error": "#e53e3e",
+                        "inverse-on-surface": "#fef7ff",
+                        "surface-container-highest": "#ece2ec",
+                        "on-primary-fixed-variant": "#a02070",
+                        "background": "#fef7ff",
+                        "tertiary": "#0096cc",
+                        "primary-container": "#f080c0",
+                        "on-primary-container": "#2e1a28",
+                        "surface-dim": "#e0d6e0",
+                        "on-tertiary": "#ffffff",
+                        "on-error": "#ffffff",
+                        "secondary": "#7c52aa",
+                        "error-container": "#ffe8e8",
+                        "surface-container-high": "#f2e8f2",
+                        "secondary-fixed-dim": "#c8a8e8",
+                        "on-secondary-fixed-variant": "#4a3068",
+                        "outline-variant": "#dcc8e0",
+                        "secondary-fixed": "#eedcff",
+                        "surface-variant": "#f2e8f2",
+                        "primary-fixed-dim": "#f0a0cc",
+                        "surface-tint": "#e040a0",
+                        "on-secondary-fixed": "#1a1030",
+                        "on-secondary": "#ffffff",
+                        "on-primary": "#ffffff",
+                        "primary-fixed": "#ffd6ee",
+                        "on-surface-variant": "#604868",
+                        "on-primary-fixed": "#3d0028",
+                        "surface-container-lowest": "#ffffff",
+                        "on-background": "#2e1a28",
+                        "on-tertiary-container": "#00334d",
+                        "primary": "#e040a0",
+                        "on-tertiary-fixed-variant": "#005580",
+                        "outline": "#907898"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "1rem",
+                        "lg": "2rem",
+                        "xl": "3rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["DM Sans"],
+                        "display": ["DM Sans"],
+                        "body": ["DM Sans"],
+                        "label": ["DM Sans"],
+                        "mono": ["ui-monospace", "SFMono-Regular", "Menlo", "Monaco", "Consolas", "Liberation Mono", "Courier New", "monospace"]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'DM Sans', sans-serif; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .glass-panel { background: rgba(254, 247, 255, 0.8); backdrop-filter: blur(12px); border: 1px solid rgba(220, 200, 224, 0.5); }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body antialiased flex h-screen overflow-hidden">
+<!-- SideNavBar -->
+<nav class="fixed left-0 top-0 h-screen flex flex-col p-4 z-40 bg-surface-dim dark:bg-surface-dim shadow-sm docked left-0 h-full w-64 bg-surface-container-low dark:bg-surface-container-low">
+<div class="mb-8 px-2">
+<h1 class="text-xl font-headline font-black text-primary dark:text-primary-fixed-dim tracking-tight">Shield AI</h1>
+<p class="text-xs text-on-surface-variant mt-1">LLM Security Proxy</p>
+</div>
+<div class="flex-1 flex flex-col gap-2 font-body text-label-sm font-medium">
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-primary hover:scale-105 transition-transform duration-200 ease-out" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+                Overview
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 bg-primary-container text-on-primary-container rounded-full scale-95 transition-all" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">list_alt</span>
+                Audit Log
+            </a>
+</div>
+<div class="mt-auto px-2 flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-secondary-container flex items-center justify-center text-on-secondary-container font-bold">
+                SA
+            </div>
+<div class="text-sm font-medium">System Admin</div>
+</div>
+</nav>
+<!-- Main Content Area -->
+<div class="flex-1 flex flex-col ml-64 relative w-full h-full">
+<!-- TopNavBar -->
+<header class="fixed top-0 right-0 left-64 flex justify-between items-center px-6 py-3 z-30 bg-surface dark:bg-surface border-b border-outline-variant flat no shadows font-body text-label-md">
+<div class="flex items-center gap-6">
+<div class="text-lg font-headline font-bold text-on-surface">Shield AI</div>
+<div class="flex gap-4">
+<button class="text-on-surface-variant hover:text-primary transition-colors">Last 1h</button>
+<button class="text-on-surface-variant hover:text-primary transition-colors">Last 24h</button>
+<button class="text-primary font-bold border-b-2 border-primary pb-1 scale-98 transition-all">Last 7d</button>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm">search</span>
+<input class="pl-9 pr-4 py-1.5 rounded-full bg-surface-container-high border-none text-sm focus:ring-2 focus:ring-primary outline-none w-64" placeholder="Search logs..." type="text"/>
+</div>
+<button class="flex items-center gap-2 px-4 py-1.5 bg-primary text-on-primary rounded-full hover:scale-105 transition-transform shadow-[0_4px_16px_rgba(224,64,160,0.2)] text-sm font-bold">
+                    Auto-refresh
+                </button>
+<div class="flex gap-2 text-on-surface-variant">
+<button class="p-1.5 rounded-full hover:bg-surface-container-high transition-colors"><span class="material-symbols-outlined">filter_list</span></button>
+<button class="p-1.5 rounded-full hover:bg-surface-container-high transition-colors"><span class="material-symbols-outlined">settings</span></button>
+</div>
+</div>
+</header>
+<!-- Main Feed & Drawer Layout -->
+<main class="flex-1 flex pt-[60px] h-full overflow-hidden">
+<!-- Table Section -->
+<div class="flex-1 overflow-auto p-6">
+<div class="glass-panel rounded-xl overflow-hidden shadow-sm">
+<table class="w-full text-left text-sm whitespace-nowrap">
+<thead class="bg-surface-container-low text-on-surface-variant text-xs uppercase tracking-wider font-bold">
+<tr>
+<th class="px-6 py-4">Time</th>
+<th class="px-6 py-4">Status</th>
+<th class="px-6 py-4">Model</th>
+<th class="px-6 py-4">Block Reason</th>
+<th class="px-6 py-4">Findings</th>
+<th class="px-6 py-4 text-right">Latency</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/30">
+<!-- Row 1 (Blocked, Selected) -->
+<tr class="bg-primary-container/10 hover:bg-surface-container transition-colors cursor-pointer border-l-4 border-primary">
+<td class="px-6 py-4 font-mono text-xs text-on-surface-variant">14:32:01.442</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-error-container text-on-error-container text-xs font-bold">
+<span class="w-1.5 h-1.5 rounded-full bg-error"></span> BLOCKED
+                                    </span>
+</td>
+<td class="px-6 py-4 font-medium">gpt-4o</td>
+<td class="px-6 py-4 text-error font-medium">Vulnerable Package Exec</td>
+<td class="px-6 py-4">
+<span class="px-2 py-0.5 rounded bg-secondary-container text-on-secondary-container text-xs font-bold">API_KEY</span>
+</td>
+<td class="px-6 py-4 font-mono text-xs text-right">142ms</td>
+</tr>
+<!-- Row 2 (Allowed) -->
+<tr class="hover:bg-surface-container transition-colors cursor-pointer">
+<td class="px-6 py-4 font-mono text-xs text-on-surface-variant">14:31:55.102</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-tertiary-fixed text-on-tertiary-container text-xs font-bold">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span> ALLOWED
+                                    </span>
+</td>
+<td class="px-6 py-4 font-medium">claude-3.5-sonnet</td>
+<td class="px-6 py-4 text-on-surface-variant">-</td>
+<td class="px-6 py-4">
+<span class="px-2 py-0.5 rounded bg-surface-variant text-on-surface-variant text-xs font-bold">NONE</span>
+</td>
+<td class="px-6 py-4 font-mono text-xs text-right">890ms</td>
+</tr>
+<!-- Row 3 (Error) -->
+<tr class="hover:bg-surface-container transition-colors cursor-pointer">
+<td class="px-6 py-4 font-mono text-xs text-on-surface-variant">14:30:12.881</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-dim text-on-surface text-xs font-bold">
+<span class="w-1.5 h-1.5 rounded-full bg-outline"></span> ERROR
+                                    </span>
+</td>
+<td class="px-6 py-4 font-medium">gpt-3.5-turbo</td>
+<td class="px-6 py-4 text-on-surface-variant">Timeout</td>
+<td class="px-6 py-4">
+<span class="px-2 py-0.5 rounded bg-secondary-container text-on-secondary-container text-xs font-bold">EMAIL_ADDRESS</span>
+</td>
+<td class="px-6 py-4 font-mono text-xs text-right text-error">&gt;5000ms</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Side Drawer (Mocked Open) -->
+<div class="w-96 border-l border-outline-variant bg-surface-bright flex flex-col h-full shadow-[-4px_0_24px_rgba(0,0,0,0.02)]">
+<div class="p-4 border-b border-outline-variant flex justify-between items-center">
+<h2 class="font-headline font-bold text-lg">Request Details</h2>
+<button class="p-1 rounded-full hover:bg-surface-container-high text-on-surface-variant"><span class="material-symbols-outlined">close</span></button>
+</div>
+<div class="flex-1 overflow-auto p-4 space-y-6">
+<!-- Meta info -->
+<div class="grid grid-cols-2 gap-4 text-sm">
+<div>
+<div class="text-xs text-on-surface-variant mb-1">Time</div>
+<div class="font-mono text-xs">14:32:01.442</div>
+</div>
+<div>
+<div class="text-xs text-on-surface-variant mb-1">Status</div>
+<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-error-container text-on-error-container text-xs font-bold">
+                                BLOCKED
+                            </span>
+</div>
+</div>
+<!-- Vulnerable Package Detail -->
+<div class="bg-error-container rounded-xl p-4 border border-error/20">
+<div class="flex items-center gap-2 mb-2 text-on-error-container font-bold">
+<span class="material-symbols-outlined text-sm">warning</span>
+                            Vulnerability Detected
+                        </div>
+<div class="text-sm text-on-surface mb-3">
+                            Model attempted to execute a script using a known vulnerable package version.
+                        </div>
+<div class="flex flex-wrap gap-2 mb-3">
+<span class="px-2 py-1 rounded bg-surface text-xs font-mono border border-outline-variant">requests v2.30.0</span>
+<span class="px-2 py-1 rounded bg-surface text-xs font-bold border border-outline-variant">CVE-2023-32289</span>
+<span class="px-2 py-1 rounded bg-error text-on-error text-xs font-bold">CVSS: 9.8</span>
+</div>
+<div class="bg-surface rounded-lg p-2 text-sm text-secondary font-medium border border-secondary/20 flex items-start gap-2">
+<span class="material-symbols-outlined text-sm mt-0.5">verified</span>
+<span>Safe version available: use &gt;=2.31.0 instead</span>
+</div>
+</div>
+<!-- Sanitized Prompt -->
+<div>
+<div class="text-xs font-bold text-on-surface-variant mb-2 uppercase tracking-wide">Sanitized Prompt</div>
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-3 font-mono text-sm whitespace-pre-wrap text-on-surface">write a python script to fetch user data using my token. hey im <span class="bg-secondary-container text-on-secondary-container px-1 rounded">[API_KEY]</span> and my email is <span class="bg-secondary-container text-on-secondary-container px-1 rounded">[EMAIL_ADDRESS]</span></div>
+</div>
+<!-- AI Response/Code -->
+<div>
+<div class="text-xs font-bold text-on-surface-variant mb-2 uppercase tracking-wide">Model Output (Intercepted)</div>
+<div class="bg-inverse-surface text-inverse-on-surface rounded-xl p-3 font-mono text-sm overflow-x-auto shadow-[0_4px_16px_rgba(0,0,0,0.1)]">
+<pre><code><span class="text-primary-fixed-dim">import</span> requests
+
+<span class="text-on-surface-variant"># Fetching data</span>
+url = <span class="text-tertiary-fixed-dim">"https://api.example.com/v1/users"</span>
+headers = {<span class="text-tertiary-fixed-dim">"Authorization"</span>: <span class="text-tertiary-fixed-dim">"Bearer [API_KEY]"</span>}
+
+<span class="text-on-surface-variant"># Note: Using requests 2.30.0 as requested</span>
+response = requests.get(url, headers=headers)
+<span class="text-primary-fixed-dim">print</span>(response.json())</code></pre>
+</div>
+</div>
+</div>
+<div class="p-4 border-t border-outline-variant bg-surface">
+<button class="w-full py-2.5 bg-surface-container-high text-on-surface font-bold rounded-full hover:bg-surface-variant transition-colors text-sm">
+                        View Full Trace
+                    </button>
+</div>
+</div>
+</main>
+</div>
+</body></html>

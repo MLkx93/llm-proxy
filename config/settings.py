@@ -37,7 +37,26 @@ class Settings:
 
     # Streaming (opt-in — requires STREAMING_ENABLED=true to activate)
     STREAMING_ENABLED: bool = _env("STREAMING_ENABLED", "false").lower() == "true"
-    
+
+    # Database (demo deliverable — admin panel persistence + chat history)
+    DATABASE_URL: str = _env("DATABASE_URL", "postgresql+asyncpg://shield:shield@localhost:5433/shield")
+
+    # Demo auth gate (NOT production — simple login for the thesis defence)
+    JWT_SECRET: str = _env("JWT_SECRET", "shield-demo-secret-change-me")
+    JWT_EXPIRY_HOURS: int = int(_env("JWT_EXPIRY_HOURS", "12"))
+    # Hardcoded demo accounts: "username:password:role" entries, comma-separated.
+    DEMO_ACCOUNTS: str = _env("DEMO_ACCOUNTS", "admin:admin:admin,user:user:user")
+
+    # Keycloak / OIDC (production admin-panel auth for the security team).
+    # OIDC_ENABLED=false → the proxy degrades to API-key auth for /v1/audit/* so it
+    # runs without Keycloak. Flip to true and fill the realm details to require SSO.
+    OIDC_ENABLED: bool = _env("OIDC_ENABLED", "false").lower() == "true"
+    KEYCLOAK_SERVER_URL: str = _env("KEYCLOAK_SERVER_URL", "")   # e.g. https://sso.company.com
+    KEYCLOAK_REALM: str = _env("KEYCLOAK_REALM", "")            # e.g. security
+    KEYCLOAK_CLIENT_ID: str = _env("KEYCLOAK_CLIENT_ID", "")    # public SPA client id
+    KEYCLOAK_AUDIENCE: str = _env("KEYCLOAK_AUDIENCE", "")      # expected token aud (often the client id or "account")
+    KEYCLOAK_ADMIN_ROLE: str = _env("KEYCLOAK_ADMIN_ROLE", "security-admin")
+
     # Vulnerability Scanning
     VULN_SCAN_ENABLED: bool = _env("VULN_SCAN_ENABLED", "false").lower() == "true"
     VULN_MIN_SEVERITY: str = _env("VULN_MIN_SEVERITY", "HIGH")  # For scanning/loading
