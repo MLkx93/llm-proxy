@@ -1,27 +1,33 @@
 """
 Demo auth service — a simple login gate for the thesis defence.
 
-NOT production-grade: accounts are hardcoded in settings (DEMO_ACCOUNTS) and
-passwords are compared in plaintext. The goal is only to keep the admin panel
-behind a login and demonstrate the user/admin role split. JWTs are HS256-signed
-so the frontend can carry identity and roles across requests.
+NOT production-grade: accounts are hardcoded in settings (DEMO_ACCOUNTS). The
+goal is only to keep the admin panel behind a login and demonstrate the
+user/admin role split. JWTs are HS256-signed so the frontend can carry
+identity and roles across requests.
 """
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
+import bcrypt
 import jwt
 
 from config.settings import settings
 
 
 def _parse_accounts() -> dict[str, dict]:
-    """Parse DEMO_ACCOUNTS ('user:pass:role,...') into {username: {password, role}}."""
+    """Parse DEMO_ACCOUNTS ('user:pass:role,...') into {username: {password_hash, role}}.
+
+    Passwords are hashed immediately on parse so the plaintext value from the
+    env var is never retained or compared directly.
+    """
     accounts: dict[str, dict] = {}
     for entry in settings.DEMO_ACCOUNTS.split(","):
         parts = entry.strip().split(":")
         if len(parts) == 3:
             username, password, role = parts
-            accounts[username] = {"password": password, "role": role}
+            password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
+            accounts[username] = {"password_hash": password_hash, "role": role}
     return accounts
 
 
@@ -31,7 +37,7 @@ _ACCOUNTS = _parse_accounts()
 def authenticate(username: str, password: str) -> Optional[dict]:
     """Return {sub, name, role} if credentials are valid, else None."""
     acct = _ACCOUNTS.get(username)
-    if acct and acct["password"] == password:
+    if acct and bcrypt.checkpw(password.encode(), acct["password_hash"]):
         return {"sub": username, "name": username, "role": acct["role"]}
     return None
 

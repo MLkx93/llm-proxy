@@ -14,12 +14,17 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from config.settings import settings
+from src.proxy.logging import get_logger
+
 from .routes.providers import router as providers_router
 from .routes.chat import router as chat_router
 from .routes.dashboard import router as dashboard_router
 from .routes.auth import router as auth_router
 from .routes.audit import router as audit_router
 from .routes.history import router as history_router
+
+logger = get_logger("webui_api")
 
 # ── App Setup ────────────────────────────────────────────────────────────────
 
@@ -62,6 +67,43 @@ async def _startup_db():
     """Create tables if the DB is reachable. Demo degrades gracefully if not."""
     from src.db.init import init_db
     await init_db()
+
+
+_DEFAULT_JWT_SECRET = "shield-demo-secret-change-me"
+_DEFAULT_DEMO_ACCOUNTS = "admin:admin:admin,user:user:user"
+
+
+def check_insecure_auth_defaults() -> bool:
+    """Warn if the demo login gate is still using its shipped-with-the-repo
+    defaults. Only relevant when OIDC isn't the auth path — OIDC_ENABLED=true
+    deployments don't use JWT_SECRET/DEMO_ACCOUNTS at all for admin auth.
+
+    Returns True if a warning was logged (used by tests).
+    """
+    if settings.OIDC_ENABLED:
+        return False
+    insecure = (
+        settings.JWT_SECRET == _DEFAULT_JWT_SECRET
+        or settings.DEMO_ACCOUNTS == _DEFAULT_DEMO_ACCOUNTS
+    )
+    if insecure:
+        logger.warning(
+            "insecure_demo_auth_defaults",
+            extra={
+                "detail": (
+                    "JWT_SECRET and/or DEMO_ACCOUNTS are still set to their "
+                    "default demo values. Override both in .env before "
+                    "exposing this deployment, or set OIDC_ENABLED=true to "
+                    "use Keycloak/OIDC instead."
+                ),
+            },
+        )
+    return insecure
+
+
+@app.on_event("startup")
+async def _warn_on_insecure_auth_defaults():
+    check_insecure_auth_defaults()
 
 
 # ── Health Check ─────────────────────────────────────────────────────────────
