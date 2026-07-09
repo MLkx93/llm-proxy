@@ -43,6 +43,22 @@ async def _init_audit_db():
     except Exception:
         pass
 
+
+@app.on_event("startup")
+async def _warm_input_policy_analyzer():
+    """Build the Presidio analyzer at startup instead of on first request.
+
+    Each --workers process lazily builds its own AnalyzerEngine on first use
+    (see input_policy.engine._get_analyzer, lru_cache-d per process). Left
+    lazy, concurrent first requests across workers can race inside spaCy's
+    model-loading path and crash the request with a 500. Warming it here runs
+    the (slow, one-time) init during container startup instead.
+    """
+    try:
+        await asyncio.to_thread(input_policy._get_analyzer)
+    except Exception:
+        logger.error("input_policy_analyzer_warmup_failed", exc_info=True)
+
 # Timeouts
 LLM_TIMEOUT_S = settings.LLM_TIMEOUT_S
 OUTPUT_CHECK_TIMEOUT_S = 10.0  # max seconds for Nexus validation

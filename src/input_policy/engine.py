@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 
 from presidio_analyzer import AnalyzerEngine
+from presidio_analyzer.nlp_engine import NlpEngineProvider
 
 from .patterns import find_secrets
 from .injection import find_injections
@@ -52,10 +53,20 @@ TECH_TERMS_ALLOWLIST = {
 }
 
 
+# Presidio's packaged default.yaml points at en_core_web_lg (~400MB, not
+# shipped in this image). Pin to en_core_web_sm, the model actually installed
+# by docker/Dockerfile, so the engine never tries to download a model at runtime.
+_NLP_CONFIGURATION = {
+    "nlp_engine_name": "spacy",
+    "models": [{"lang_code": "en", "model_name": "en_core_web_sm"}],
+}
+
+
 @lru_cache(maxsize=1)
 def _get_analyzer() -> AnalyzerEngine:
     """Lazy-initialise Presidio once; cached for the process lifetime."""
-    return AnalyzerEngine()
+    nlp_engine = NlpEngineProvider(nlp_configuration=_NLP_CONFIGURATION).create_engine()
+    return AnalyzerEngine(nlp_engine=nlp_engine)
 
 
 def _hash_messages(messages: list[dict]) -> str:
