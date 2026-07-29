@@ -1,5 +1,9 @@
 # LLM Proxy — Complete Project Guide
 
+> **Background/onboarding reading, written against an earlier LiteLLM-based
+> deployment.** For current setup and how to run the stack, see
+> [README.md](README.md).
+
 **Who this is for:** Someone with beginner-to-intermediate coding skills, no prior AI/ML experience, doing a cybersecurity internship focused on AI security and governance.
 
 **What this teaches:** How every file in this project works, why each technology was chosen, and how to navigate the codebase independently.

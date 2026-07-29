@@ -1,5 +1,11 @@
 # First-Time Setup Guide — LLM Proxy
 
+> **This document predates [README.md](README.md) and describes the earlier
+> LiteLLM-based deployment.** The current stack runs on OpenRouter via Docker
+> Compose. Start with the README; use this file only for the LiteLLM-specific
+> background it still covers. Where the two disagree, the README and
+> `config/settings.py` are authoritative.
+
 Everything you need to go from a fresh clone to a running proxy, step by step.
 
 ---
@@ -371,7 +377,7 @@ export ANTHROPIC_AUTH_TOKEN="<their-litellm-key>"
 If the proxy is on the same machine as the user:
 ```bash
 export ANTHROPIC_BASE_URL="http://localhost:8080"
-export ANTHROPIC_AUTH_TOKEN="cr_78555..."   # their own LiteLLM key
+export ANTHROPIC_AUTH_TOKEN="<your-litellm-key>"   # their own LiteLLM key
 ```
 
 **Users use the same LiteLLM key they were already given.** The only thing that changes is the URL — instead of pointing to `http://litellm.internal.example:3115/api`, they point to the proxy. The proxy forwards their key to LiteLLM on their behalf.
