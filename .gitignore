@@ -1,26 +1,51 @@
 # Secrets — never commit
 .env
+.env.local
 *.pem
 *.key
 *.p12
+
+# Local tool config that can embed credentials.
+# .mcp.json holds a live STITCH_API_KEY; .claude/settings.local.json records
+# approved shell commands verbatim, which has previously captured a bearer
+# token and an internal hostname. Templates are committed instead.
+.mcp.json
+.claude/settings.local.json
 
 # Python
 __pycache__/
 *.py[cod]
 *.egg-info/
 .venv/
+venv/
 dist/
 build/
 
+# Node
+node_modules/
+src/webui-react/build/
+
 # Logs (runtime output — not source)
 logs/
+*.log
 
 # Test / coverage
 .pytest_cache/
 .coverage
 htmlcov/
 
-# IDE
+# Runtime state
+*.pid
+security_advisories.db
+
+# IDE / editor
 .vscode/
 .idea/
 *.swp
+*.swo
+*~
+.DS_Store
+
+# Scratch
+scratch/
+tmp/
